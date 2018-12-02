@@ -2,29 +2,96 @@
 title: "data_pre_processing"
 author: "Dongyuan Song"
 date: "2018/12/2"
-output: html_document
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+  github_document: default
 ---
-
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, 
+                      #root.dir = "/n/irizarryfs01_backed_up/songdongyuan/PBM-Exploration/", 
+                      root.dir = "D:/MS/Master Course/BST260/BST260/", 
+                      fig.width = 8, fig.height = 6)
 ```
 
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+```{r}
+library(tidyverse)
 ```
 
-## Including Plots
 
-You can also embed plots, for example:
+## Data Pre-processing
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+This is the begining file for data pre-processing.
+
+### Clean original csv manually
+
+A63, A75, A106  
+BI4, BI5, BI69
+
+### Read in csv and modify it
+```{r}
+dat <- read_csv("./data/food_coded_clean.csv", na = "nan")
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r}
+head(dat)
+```
+
+We notice that here is some duplicated columns. Filter out those columns.
+```{r}
+dat <- dat %>% dplyr::select( - ends_with("_1"))
+```
+
+```{r}
+head(dat)
+```
+
+Convert `int` to `factor` as most of them are categorical data.
+```{r}
+dat <- dat %>% dplyr::mutate_if(is.integer, as.factor)
+```
+
+```{r}
+head(dat)
+```
+
+However, there are some oridinary categorical data. We convert them them back to numeric data.
+11.Cook, 19.Eating out, 21.Ethnic food, 22 Exercise, 23 Father Education, 30 Fruit day, 
+30.grade level, 32.Greek Food, 37.Income, 38.Indian Food, 39.Italian Food, 43.mothers education,
+45.nutritional_check, 46 parents_cook, 48) pay_meal_out, 49) Persian_food, 53) Tai_food 57) veggies_day,
+
+```{r}
+dat <- dat %>% dplyr::mutate_at(vars(ends_with("_food")), as.integer)
+```
+
+```{r}
+dat <- dat %>% dplyr::mutate_at(vars(ends_with("_education")), as.integer)
+```
+
+```{r}
+dat <- dat %>% dplyr::mutate_at(vars(ends_with("_day")), as.integer)
+```
+
+```{r}
+dat <- dat %>% dplyr::mutate_at(.funs = as.integer, .vars = c("cook", 
+                                                             "eating_out", "exercise", "grade_level",
+                                                             "income", "nutritional_check", 
+                                                             "parents_cook", "pay_meal_out"))
+```
+
+```{r}
+dat <- dat %>% dplyr::mutate(fav_food = as.factor(fav_food))
+```
+
+
+```{r}
+head(dat)
+```
+
+Save rds
+```{r}
+saveRDS(dat, "./data/breakfast_clean.rds")
+```
+
