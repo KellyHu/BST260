@@ -1,0 +1,72 @@
+---
+title: "260Project_Jingyi"
+author: "Jingyi Huang"
+date: "2018/12/2"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Exploratory Analysis
+
+```{r }
+library(corrplot)
+library(dplyr)
+library(tidyverse)
+
+```
+
+```{r}
+food <- read.csv("data/food_coded_clean.csv",stringsAsFactors = FALSE) 
+food_numeric <- food %>% select_if(is.numeric)
+food_numeric <- food_numeric[complete.cases(food_numeric), ]
+
+```
+
+need to delete comfort food reasons.1 (pretty much identical to comfort food reasons )
+
+
+```{r}
+f3=food_numeric %>% 
+  select(comfort_food_reasons_coded,calories_scone)
+
+F3 <- cor(f3)
+corrplot(F3, method = "number")
+
+```
+
+Health feeling =1 marks the people who are most confident that they are healthy. As we can see from the boxplots, people who are the most confident about their health condition associate with higher GPA (the median is the highest among the 10 rating categories).
+```{r}
+food %>% 
+  select(healthy_feeling,GPA)%>% 
+    ggplot(aes( x=as.factor(healthy_feeling),y=GPA, color=as.factor(healthy_feeling))) +
+    geom_boxplot() +
+  labs(color = "Healthy feeling\n")+
+  #geom_line(alpha=0.2, color="blue")+
+    #scale_y_continuous(trans = "sqrt") +
+    #geom_vline(xintercept = vaccine_startyear, color= "red")+
+   #annotate("text", label="Measles Vaccine introduced", x=1964.5, y=1500, angle=90, size=3.5, color="red")+
+    xlab("Healthy feeling") + 
+    ylab("GPA") +
+    ggtitle("Boxplots of GPA vs Healthy feeling")
+
+
+```
+
+```{r}
+food %>% 
+  select(fruit_day,GPA)%>% 
+    ggplot(aes( x=as.factor(fruit_day),y=GPA, color=as.factor(fruit_day))) +
+    geom_boxplot() +
+  labs(color = "How likely to eat fruit in a regular day\n")+
+  #geom_line(alpha=0.2, color="blue")+
+    #scale_y_continuous(trans = "sqrt") +
+    #geom_vline(xintercept = vaccine_startyear, color= "red")+
+   #annotate("text", label="Measles Vaccine introduced", x=1964.5, y=1500, angle=90, size=3.5, color="red")+
+    xlab("Fruit") + 
+    ylab("GPA") +
+    ggtitle("Boxplots of GPA vs Fruit")
+
+```
