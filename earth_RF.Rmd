@@ -1,0 +1,59 @@
+---
+title: "Some Selection"
+author: "Yuchen Hu"
+date: "11/26/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## importance based on earth (numerical gpa)
+```{r}
+library(tidyr)
+library(earth)
+library(data.table)
+library(reshape2)
+library(dplyr)
+library(ggplot2)
+food <- read.csv("food_coded.csv",stringsAsFactors = FALSE) 
+food_numeric <- food %>% select_if(is.numeric)
+food_numeric <- food_numeric[complete.cases(food_numeric), ]
+
+food_numeric_gpa <- merge(as.numeric(food$GPA),
+                          food_numeric,by="row.names",all.x=FALSE)[,-1]
+food_numeric_gpa <- food_numeric_gpa[complete.cases(food_numeric_gpa),]
+earth.food_numeric <- earth(x ~ ., data=food_numeric_gpa)
+earth.food_numeric
+importance <- evimp (earth.food_numeric)
+importance
+```
+
+## simple regression on variables selected
+```{r}
+var_selected <- c("x",rownames(importance))
+food_numeric_gpa_selected <- food_numeric_gpa[,var_selected]
+fit.food_numeric_gpa_selected <- lm(x~ . ,data = food_numeric_gpa_selected)
+summary(fit.food_numeric_gpa_selected)
+```
+
+## feature selection via random forest (numerical gpa)
+```{r}
+library(party)
+RF.food_numeric <- cforest(x ~ . , data= food_numeric_gpa, 
+                           control=cforest_unbiased(mtry=2,ntree=50))
+RF.food_numeric
+varimp(RF.food_numeric) %>% sort() #mean decrease in accuracy
+varimp(RF.food_numeric, conditional=TRUE) %>% sort()  #adjusts for correlations
+```
+
+## regression on variables with positive decrease
+```{r}
+RF.selected <- varimp(RF.food_numeric, conditional=TRUE) %>% sort()
+var_RFselected <- c("x",names(RF.selected[RF.selected>0]))
+food_numeric_gpa_RFselected <- food_numeric_gpa[,var_RFselected]
+fit.food_numeric_gpa_RFselected <- lm(x~ . ,data = food_numeric_gpa_RFselected)
+summary(fit.food_numeric_gpa_RFselected)
+```

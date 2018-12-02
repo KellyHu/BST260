@@ -1,0 +1,72 @@
+---
+title: "Some NLP"
+author: "Yuchen Hu"
+date: "11/26/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)   
+library(stringr)      
+library(tidytext)
+library(widyr)
+library(ggraph)
+library(igraph)
+
+
+food <- read.csv("food_coded.csv",stringsAsFactors = FALSE) 
+
+comfort_food_reason <- food$comfort_food_reasons %>% str_split(" ")
+
+comfort_food <- food$comfort_food %>% 
+  str_to_lower() %>% 
+  str_split(",|\\|/| ") %>%
+  map_df(enframe, .id = 'student') %>% 
+  unnest %>% 
+  filter(value != '' & value != 'and') %>%
+  select(student, value)
+comfort_food %>%
+  group_by(value) %>%
+  summarize(freq = n()) %>%
+  top_n(15, wt = freq) %>%
+  ggplot(aes(reorder(value, freq), freq)) +
+  geom_bar(stat = "identity", alpha = .8, show.legend = FALSE) +
+  coord_flip()
+
+comfort_food_reason <- food$comfort_food_reasons %>% 
+  str_to_lower() %>% 
+  str_split(",|\\|/| ") %>%
+  map_df(enframe, .id = 'student') %>% 
+  unnest %>% 
+  filter(!(value%in%c('','and','i','when','am','or','they','i\'m','my','usually','are','a'))) %>%
+  select(student, value)
+comfort_food_reason %>%
+  group_by(value) %>%
+  summarize(freq = n()) %>%
+  top_n(15, wt = freq) %>%
+  ggplot(aes(reorder(value, freq), freq)) +
+  geom_bar(stat = "identity", alpha = .8, show.legend = FALSE) +
+  coord_flip()
+
+comfort <- rbind(comfort_food,comfort_food_reason)
+comfort_pairs <- comfort %>%
+  pairwise_count(value, student, sort = TRUE)
+comfort_cor <- comfort %>%
+  group_by(value) %>%
+  filter(n() >= 5) %>%
+  pairwise_cor(value, student) %>%
+  filter(!is.na(correlation), correlation > .15)
+
+set.seed(123)
+comfort_cor %>%
+  graph_from_data_frame() %>%
+  ggraph(layout = "fr") +
+  geom_edge_link(aes(edge_alpha = correlation), show.legend = FALSE) +
+  geom_node_point(color = "lightblue", size = 5) +
+  geom_node_text(aes(label = name), repel = TRUE) +
+  theme_void()
+```
