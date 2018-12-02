@@ -1,0 +1,74 @@
+---
+title: "Factor Analysis"
+author: "Yuchen Hu"
+date: "11/26/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(data.table)
+library(psych)
+library(nFactors)
+library(reshape2)
+library(tidyr)
+
+food <- read.csv("food_coded.csv",stringsAsFactors = FALSE) 
+#summary(food)
+```
+
+## basic FA
+```{r}
+food_numeric <- food %>% select_if(is.numeric)
+food_numeric <- food_numeric[complete.cases(food_numeric), ]
+ev <- eigen(cor(food_numeric))
+ap <- parallel(subject=nrow(food_numeric),var=ncol(food_numeric),
+               rep=100,cent=.05)
+nS <- nScree(x=ev$values, aparallel=ap$eigen$qevpea)
+plotnScree(nS)
+
+fa_numeric <- factanal(food_numeric, 5, rotation="varimax", scores="regression")
+print(fa_numeric, digits=2, cutoff=.3, sort=TRUE)
+# factor1: food choices; 2:calories guess; 3:life style ; 4:comfort food; 5:education
+fa_numeric <- fa(food_numeric, 5)
+fa.diagram(fa_numeric,side=1) 
+
+# plot the result
+gathering <- as.data.frame(matrix(nrow = dim(food_numeric)[2], ncol =5))
+gathering$Variable <- colnames(food_numeric)
+for (i in 1:5) {
+  for (j in 1:dim(food_numeric)[2]) {
+    gathering[j, i] <- fa_numeric$loadings[j, i]  
+  }
+}
+colnames(gathering) <- c("food_choices","calories_guess",
+                         "life_style","comfort_food","education", "Variable")
+gathering <- gathering %>% gather("Factor", "Value", 1:5)
+ggplot(gathering, aes(Variable, abs(Value), fill=Factor)) + 
+  geom_bar(stat="identity") + coord_flip() + 
+  ylab("Factor Loading") + 
+  theme_bw(base_size=12) 
+```
+
+## run regression on score
+```{r}
+factor_gpa <- merge(as.numeric(food$GPA),fa_numeric$scores,
+                    by="row.names",all.x=FALSE)[,-1]
+names(factor_gpa) <- c("GPA","food_choices","calories_guess","life_style",
+                       "comfort_food","education")
+# regression based on numerical GPA
+fit.factor <- lm(GPA~food_choices+calories_guess+life_style+comfort_food+education,
+                 data=factor_gpa)
+summary(fit.factor)
+# regression based on categorical GPA
+factor_gpa$GPA <- cut(factor_gpa$GPA, c(0,2.5,3,3.25,3.5,3.75,4.0))
+factor_gpa$GPA <- as.numeric(factor_gpa$GPA)
+fit.factor <- lm(GPA~food_choices+calories_guess+life_style+comfort_food+education,
+                 data=factor_gpa)
+summary(fit.factor)
+```
