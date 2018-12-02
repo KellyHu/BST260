@@ -1,0 +1,53 @@
+---
+title: "260Project"
+author: "Jingyi Huang"
+date: "2018/12/2"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+An important part of your project is the RMarkdown and HTML files. This will detail your steps in developing your solution, including how you collected the data, alternative solutions you tried, describing statistical methods you used, and the insights you got. Equally important to your final results is how you got there! Your RMarkdown and HTML files are the place you describe and document the space of possibilities you explored at each step of your project. We strongly advise you to include many visualizations.
+
+## Overview and Motivation
+Provide an overview of the project goals and the motivation for it. Consider that this will be read by people who did not see your project proposal.
+
+It is widely acknowledged that students at colleges can sometimes be stressful because they are eager to get good grades to prepare better for their future career or academic development.  As the students from the school of Public Health at Harvard University, not only do we care about our grades, but we also want to make sure that college students are in healthy condition while pursuing  good GPAs.  Therefore, we are interested in how nutrition information is associated with the pressure and GPA of college kids. 
+
+
+
+
+## Related Work
+Anything that inspired you, such as a paper, a web site, or something we discussed in class.
+
+
+##Initial Questions
+What questions are you trying to answer? How did these questions evolve over the course of the project? What new questions did you consider in the course of your analysis?
+
+
+
+
+
+##Data
+Source, scraping method, cleanup, etc.
+
+Kaggle: food choices, college students food and cooking preferences
+https://www.kaggle.com/borapajo/food-choices
+
+We also plan to collect data via anonymous questionaires for possible predictions.
+
+
+
+##Exploratory Analysis
+What visualizations did you use to look at your data in different ways? What are the different statistical methods you considered? Justify the decisions you made, and show any major changes to your ideas. How did you reach these conclusions?
+
+
+##Final Analysis
+What did you learn about the data? How did you answer the questions? How can you justify your answers?
+
+
+
