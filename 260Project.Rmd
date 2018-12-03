@@ -31,7 +31,6 @@ What questions are you trying to answer? How did these questions evolve over the
 
 
 
-
 ##Data
 Source, scraping method, cleanup, etc.
 
@@ -44,6 +43,8 @@ We also plan to collect data via anonymous questionaires for possible prediction
 
 ##Exploratory Analysis
 What visualizations did you use to look at your data in different ways? What are the different statistical methods you considered? Justify the decisions you made, and show any major changes to your ideas. How did you reach these conclusions?
+
+
 
 
 ##Final Analysis
