@@ -1,0 +1,160 @@
+---
+title: "machine_learning_exploration"
+author: "Dongyuan Song"
+date: "2018/12/5"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+  github_document: default
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, 
+                      #root.dir = "/n/irizarryfs01_backed_up/songdongyuan/PBM-Exploration/", 
+                      root.dir = "D:/MS/Master Course/BST260/Final_project/BST260", 
+                      fig.width = 8, fig.height = 6)
+```
+
+```{r}
+library(tidyverse)
+library(caret)
+library(pastecs)
+```
+
+We first re-read in original data.
+```{r}
+dat <- read_csv("./data/food_coded_clean.csv", na = "nan")
+```
+
+```{r}
+head(dat)
+```
+
+We notice that here is some duplicated columns. Filter out those columns.
+```{r}
+dat <- dat %>% dplyr::select( - ends_with("_1"))
+```
+
+```{r}
+head(dat)
+```
+
+For `chr` column, we remove them. For `int` column we convert them all into `fct` (although some of them are nearly ordinary categorical data).
+```{r}
+dat <- dat %>% dplyr::mutate_if(is.integer, as.factor) %>%
+  dplyr::select_if(function(x) !is.character(x))
+```
+
+
+```{r}
+head(dat)
+```
+
+
+```{r}
+dat_dummy <- dummyVars(" ~ .", data = dat)
+head(dat_dummy)
+dat_trsf <- data.frame(predict(dat_dummy, newdata = dat))
+```
+
+```{r}
+nzv <- nearZeroVar(dat_trsf, saveMetrics= TRUE)
+nzv[nzv$nzv,]
+```
+Unluckily, there are some near zero-variance factors. We remove them.
+
+```{r}
+nzv <- nearZeroVar(dat_trsf)
+dat_trsf_nz <- dat_trsf[, -nzv]
+```
+
+Good.
+
+
+Next we want to solve the correlation problem. We set the cutoff for high correlation as 0.75.
+```{r}
+descrCor <- cor(dat_trsf_nz, use = "pairwise.complete.obs")
+summary(descrCor[upper.tri(descrCor)])
+highlyCorDescr <- findCorrelation(descrCor, cutoff = .75)
+dat_trsf_nz <- dat_trsf_nz[,-highlyCorDescr]
+descrCor2 <- cor(dat_trsf_nz, use = "pairwise.complete.obs")
+summary(descrCor2[upper.tri(descrCor2)])
+```
+
+```{r}
+dim(dat)
+dim(dat_trsf)
+dim(dat_trsf_nz)
+```
+
+
+
+Imputation. Here we use medain imputation since it does not require centering.  
+```{r}
+preProcValues <- preProcess(dat_trsf_nz, method = c("medianImpute"), na.remove = TRUE)
+dat_trsf_nz_im <- predict(preProcValues, dat_trsf_nz)
+```
+
+```{r}
+dat_trsf_nz_im[1:10, 1:10]
+```
+
+
+```{r}
+dat_trsf_nz_im %>% as.tibble() %>%
+  ggplot(aes(x = GPA)) +
+  geom_histogram() +
+  theme_bw()
+summary(dat_trsf_nz_im$GPA)
+```
+
+Split data into train set and test set.
+```{r}
+set.seed(1234)
+trainIndex <- createDataPartition(dat_trsf_nz_im$GPA, p = .5, 
+                                  list = FALSE, 
+                                  times = 1)
+head(trainIndex)
+```
+
+
+Now we can generate formal training set and test set.
+```{r}
+x.t <- dat_trsf_nz_im
+y.t <- dat_trsf_nz_im[, "GPA"]
+```
+
+```{r}
+y.train <- y.t[trainIndex]
+y.test <- y.t[-trainIndex]
+
+x.train <- x.t[trainIndex,]
+x.test <- x.t[-trainIndex,]
+```
+
+```{r}
+x <- x.train
+y <- y.train
+```
+
+```{r}
+stat.desc(y.train)
+```
+
+
+```{r, message=FALSE}
+set.seed(123)
+models = c("knn","lm", "ridge", "lasso", "rf", "gbm", "svmRadial", "nnet")
+
+train.control = trainControl(method = "repeatedcv", number=10, repeats = 5, verbose = FALSE)
+
+n_models = length(models)
+for (m in 1:n_models) {
+    fit = train(GPA ~ ., method = models[m], trControl = train.control, data = x, trace = FALSE)
+    print(c(models[m], getTrainPerf(fit)))
+    pre = predict(fit, newdata = x.test, type = "raw")
+    mse_test <- sqrt(mean((y.test - pre)^2))
+    print(mse_test)
+}
+```
