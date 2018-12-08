@@ -19,9 +19,12 @@ library(tidyverse)
 ```
 
 ```{r}
-food <- read.csv("data/food_coded_clean.csv",stringsAsFactors = FALSE) 
-food_numeric <- food %>% select_if(is.numeric)
-food_numeric <- food_numeric[complete.cases(food_numeric), ]
+#food <- read.csv("data/food_coded_clean.csv",stringsAsFactors = FALSE) 
+#food_numeric <- food %>% select_if(is.numeric)
+#food_numeric <- food_numeric[complete.cases(food_numeric), ]
+
+food=breakfast_clean <- readRDS("~/Desktop/BST260/data/breakfast_clean.rds")
+class(food$comfort_food_reasons_coded)
 
 ```
 
@@ -29,11 +32,11 @@ need to delete comfort food reasons.1 (pretty much identical to comfort food rea
 
 
 ```{r}
-f3=food_numeric %>% 
-  select(comfort_food_reasons_coded,calories_scone)
+#f3=food%>% 
+  #select(as.numeric(comfort_food_reasons_coded),as.numeric(calories_scone))
 
-F3 <- cor(f3)
-corrplot(F3, method = "number")
+#F3 <- cor(f3)
+#corrplot(F3, method = "number")
 
 ```
 
@@ -42,12 +45,11 @@ Health feeling =1 marks the people who are most confident that they are healthy.
 food %>% 
   select(healthy_feeling,GPA)%>% 
     ggplot(aes( x=as.factor(healthy_feeling),y=GPA, color=as.factor(healthy_feeling))) +
-    geom_boxplot() +
+    geom_boxplot(width=0.5, color="grey", alpha=0.5) +
+  geom_violin(width=1.4)+
   labs(color = "Healthy feeling\n")+
-  #geom_line(alpha=0.2, color="blue")+
-    #scale_y_continuous(trans = "sqrt") +
-    #geom_vline(xintercept = vaccine_startyear, color= "red")+
-   #annotate("text", label="Measles Vaccine introduced", x=1964.5, y=1500, angle=90, size=3.5, color="red")+
+    #geom_jitter(color="grey", size=0.7, alpha=0.5) +
+   geom_point(show.legend = FALSE) +
     xlab("Healthy feeling") + 
     ylab("GPA") +
     ggtitle("Boxplots of GPA vs Healthy feeling")
@@ -59,14 +61,13 @@ food %>%
 food %>% 
   select(fruit_day,GPA)%>% 
     ggplot(aes( x=as.factor(fruit_day),y=GPA, color=as.factor(fruit_day))) +
-    geom_boxplot() +
-  labs(color = "How likely to eat fruit in a regular day\n")+
-  #geom_line(alpha=0.2, color="blue")+
-    #scale_y_continuous(trans = "sqrt") +
-    #geom_vline(xintercept = vaccine_startyear, color= "red")+
-   #annotate("text", label="Measles Vaccine introduced", x=1964.5, y=1500, angle=90, size=3.5, color="red")+
+    geom_boxplot(width=0.5, color="grey", alpha=0.5) +
+  geom_violin(width=1.4)+
+  labs(color = "Fruit\n")+
+ geom_point(show.legend = FALSE) +
     xlab("Fruit") + 
     ylab("GPA") +
     ggtitle("Boxplots of GPA vs Fruit")
 
 ```
+#Shiny
