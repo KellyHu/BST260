@@ -1,0 +1,161 @@
+---
+title: "Shiny_with_text"
+author: "Yuchen Hu"
+date: "12/9/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Word cloud and exploration
+
+```{r}
+library(wordcloud)
+library(tidyverse)   
+library(stringr)      
+library(tidytext)
+library(shiny)
+
+food <- read.csv("food_coded.csv",stringsAsFactors = FALSE) 
+
+food_health <- list("comfort_food" = "comfort_food",
+              "Reason for Having Comfort Food" = "comfort_food_reasons",
+              "Current Diet" = "diet_current",
+              "Change in Eating Habits" = "eating_changes",
+              "Food used to have in childhood" = "food_childhood",
+              "Perception of Healthy Meal" = "healthy_meal",
+              "Ideal diet" = "ideal_diet",
+              "Dinners to Have with Friends" = "meals_dinner_friend",
+              "Types of Sports" = "type_sports")
+
+getWords <- function(variable) {
+  if (!(variable %in% food_health))
+    stop("Unknown variable")
+
+  text <- food[,names(food) == variable] %>% 
+    str_to_lower() %>% 
+    str_split("\"\'(),|\\|/| ") %>%
+    unlist()
+  text <- text[!text %in% c('','and','i','when','am','or','they','i\'m','my','usually','are','a','/')]}
+
+u <- shinyUI(fluidPage(
+  titlePanel("Word Cloud for text variables in our dataset"),
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("selection", "Choose a variable:",
+                  choices = food_health),
+      hr(),
+      sliderInput("freq",
+                  "Minimum Frequency:",
+                  min = 1,  max = 20, value = 5)),
+    mainPanel(plotOutput("plot")))))
+
+s <- shinyServer(
+  function(input, output, session) {
+  terms <- reactive({getWords(input$selection)})
+
+  wordcloud_rep <- repeatable(wordcloud)
+  output$plot <- renderPlot({
+    v <- terms()
+    wordcloud_rep(v, scale=c(4,0.5),
+                  min.freq = input$freq, 
+                  colors=brewer.pal(8, "Dark2"))})})
+
+shinyApp(ui = u,server = s)
+
+```
+
+## Junk food and mental health with network analysis
+```{r}
+library(shiny)
+library(NLP)
+library(tm)
+library(igraph)
+library(networkD3)
+
+u <- shinyUI(fluidPage(
+  titlePanel("Junk food and mental health with network analysis"),
+
+  sidebarLayout(
+    position = "left",
+    sidebarPanel(
+      h2("Controls"),
+      sliderInput("sparse", "Sparsity:", 0.9, 1, 0.994,0.002),
+      numericInput("fmrseed", "F-R Seed:", 1234, 1, 10000, 1)
+    ),
+    mainPanel(
+      h2("Network Graphs"),
+      tabsetPanel(
+        tabPanel("Radial",radialNetworkOutput("radial")),
+        tabPanel("Fruchterman-Reingold", plotOutput("fmr"))
+      )
+  )
+))
+)
+
+data <- food[,names(food) %in% c("comfort_food","comfort_food_reasons")] 
+data <- do.call(paste, c(food[c("comfort_food", "comfort_food_reasons")], sep = ". ")) %>% str_to_lower()
+
+s <- shinyServer(
+  function(input, output)
+  {
+    r_stats_text_corpus <- Corpus(VectorSource(data))
+
+    matadj <- reactive({
+      tdm <-TermDocumentMatrix(r_stats_text_corpus, control = list(wordLenghts = c(1, Inf)))
+      idx <-which(dimnames(tdm)$Terms == "call") ##change the terms to be searched
+      tdm2 <- removeSparseTerms(tdm, sparse = input$sparse)
+      m2 <- as.matrix(tdm2)
+      m2[m2 >= 1] <- 1
+      m2 <- m2 %*% t(m2) ##Adjaceny Matrix - how often words co-occur in a sentence
+      m2
+    })
+
+    fit <- reactive({
+      fit <- hclust(dist(matadj()))
+    })
+
+    fmrlayout <- reactive({
+      set.seed(input$fmrseed)
+      g <- graph.adjacency(matadj(), weighted = T, mode = "undirected")
+      g <- simplify(g)
+      V(g)$label <- V(g)$name
+      V(g)$degree <- degree(g)
+      layout <- layout.fruchterman.reingold(g)
+      rv <- list()
+      rv$g <- g
+      rv$layout <- layout
+      rv
+    })
+
+    radialnet <- reactive({
+      set.seed(input$fmrseed)
+      radial <- as.radialNetwork(fit())
+    })  
+
+    ###Different Social Network Graphics
+
+    #Radial Network
+    output$radial <- renderRadialNetwork({
+      radialNetwork(radialnet())
+    })
+    output$radial1 <- renderRadialNetwork({
+      radialNetwork(radialnet())
+    })
+
+    # Fruchterman-Reingold Network
+    output$fmr <- renderPlot({
+      rv <- fmrlayout()
+      plot(rv$g, layout = rv$layout)
+    })
+    output$fmr1 <- renderPlot({
+      rv <- fmrlayout()
+      plot(rv$g, layout = rv$layout)
+    })
+  }
+)
+
+shinyApp(ui = u,server = s)
+```

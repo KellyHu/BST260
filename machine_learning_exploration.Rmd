@@ -18,8 +18,10 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE,
 
 ```{r}
 library(tidyverse)
+library(pROC)
 library(caret)
 library(pastecs)
+library(ggcorrplot)
 ```
 
 We first re-read in original data.
@@ -43,7 +45,8 @@ head(dat)
 For `chr` column, we remove them. For `int` column we convert them all into `fct` (although some of them are nearly ordinary categorical data).
 ```{r}
 dat <- dat %>% dplyr::mutate_if(is.integer, as.factor) %>%
-  dplyr::select_if(function(x) !is.character(x))
+  dplyr::select_if(function(x) !is.character(x)) %>%
+  dplyr::mutate(weight = as.numeric(weight))
 ```
 
 
@@ -53,8 +56,7 @@ head(dat)
 
 
 ```{r}
-dat_dummy <- dummyVars(" ~ .", data = dat)
-head(dat_dummy)
+dat_dummy <- dummyVars(" ~ .", data = dat,  fullRank = TRUE)
 dat_trsf <- data.frame(predict(dat_dummy, newdata = dat))
 ```
 
@@ -72,11 +74,13 @@ dat_trsf_nz <- dat_trsf[, -nzv]
 Good.
 
 
-Next we want to solve the correlation problem. We set the cutoff for high correlation as 0.75.
+Next we want to solve the correlation problem. We set the cutoff for high correlation as 0.9.
 ```{r}
 descrCor <- cor(dat_trsf_nz, use = "pairwise.complete.obs")
 summary(descrCor[upper.tri(descrCor)])
-highlyCorDescr <- findCorrelation(descrCor, cutoff = .75)
+
+suppressWarnings(ggcorrplot(descrCor))
+highlyCorDescr <- findCorrelation(descrCor, cutoff = .9)
 dat_trsf_nz <- dat_trsf_nz[,-highlyCorDescr]
 descrCor2 <- cor(dat_trsf_nz, use = "pairwise.complete.obs")
 summary(descrCor2[upper.tri(descrCor2)])
@@ -112,7 +116,7 @@ summary(dat_trsf_nz_im$GPA)
 Split data into train set and test set.
 ```{r}
 set.seed(1234)
-trainIndex <- createDataPartition(dat_trsf_nz_im$GPA, p = .5, 
+trainIndex <- createDataPartition(dat_trsf_nz_im$GPA, p = .8, 
                                   list = FALSE, 
                                   times = 1)
 head(trainIndex)
@@ -143,18 +147,99 @@ stat.desc(y.train)
 ```
 
 
-```{r, message=FALSE}
+```{r, warning=TRUE}
 set.seed(123)
-models = c("knn","lm", "ridge", "lasso", "rf", "gbm", "svmRadial", "nnet")
-
-train.control = trainControl(method = "repeatedcv", number=10, repeats = 5, verbose = FALSE)
+models = c("knn","lm", "ridge", "lasso", "rf", "svmRadial", "glmboost", "xgbLinear", "nnet")
+train.control = trainControl(method = "repeatedcv", number = 5, repeats = 10, verbose = FALSE)
 
 n_models = length(models)
 for (m in 1:n_models) {
-    fit = train(GPA ~ ., method = models[m], trControl = train.control, data = x, trace = FALSE)
+    fit = train(GPA ~ ., method = models[m], trControl = train.control, data = x)
     print(c(models[m], getTrainPerf(fit)))
     pre = predict(fit, newdata = x.test, type = "raw")
     mse_test <- sqrt(mean((y.test - pre)^2))
     print(mse_test)
 }
 ```
+
+We also use the naive mean of traning set to calculate RMSE on test set.
+```{r}
+sqrt(mean((y.test - mean(y.train))^2))
+```
+
+
+Since the continous outcome might be difficult to predict, we might consider convert it into binary outcome. 
+```{r}
+dat_trsf_nz_im_c <- dat_trsf_nz_im %>% dplyr::mutate(GPA = GPA >= 3.5, GPA = as.factor(GPA))
+x.c <- dat_trsf_nz_im_c
+y.c <- dat_trsf_nz_im_c[, "GPA"]
+```
+
+```{r}
+y.train.c <- y.c[trainIndex]
+y.test.c <- y.c[-trainIndex]
+
+x.train.c <- x.c[trainIndex,]
+x.test.c <- x.c[-trainIndex,]
+```
+
+```{r}
+x.c <- x.train.c
+y.c <- y.train.c
+```
+
+```{r}
+mean(as.numeric(y.train.c) - 1)
+```
+
+```{r}
+set.seed(123)
+
+models = c("knn", "rf", "glm", "lda",  "sparseLDA", "svmLinear", "svmRadial", "svmRadialWeights")
+train.control = trainControl(method = "repeatedcv", number = 10, repeats = 10, verbose = FALSE)
+
+n_models = length(models)
+
+for (m in 1:n_models) {
+    fit = train(GPA ~ ., method = models[m], trControl = train.control, data = x.c)
+    print(c(models[m], getTrainPerf(fit)))
+    pre = predict(fit, newdata = x.test.c, type = "raw")
+    acc_test <- (mean(y.test.c == pre))
+    print(acc_test)
+}
+```
+
+We also calculate the baseline acc.
+```{r}
+(mean(y.test.c == TRUE))
+```
+
+
+Notice that SVM does not generate probability. Here we compare KNN and Random Forest.
+```{r}
+set.seed(123)
+fit_knn <- train(GPA ~ ., method = "knn", trControl = train.control, data = x.c)
+probs1 = predict(fit_knn, newdata = x.test.c, type = "prob")
+R1 = roc(y.test.c, probs1[,2])
+plot.roc(R1, col=1, lwd=2, main="ROC curves")
+AUC1 = R1$auc
+
+fit_rf <- train(GPA ~ ., method = "rf", trControl = train.control, data = x.c)
+probs2 = predict(fit_rf, newdata = x.test.c, type = "prob")
+R2 = roc(y.test.c, probs2[,2])
+plot.roc(R2, add = TRUE, col=2, lwd=2)
+AUC2 = R2$auc
+
+fit_lda <- train(GPA ~ ., method = "lda", trControl = train.control, data = x.c)
+probs3 = predict(fit_lda, newdata = x.test.c, type = "prob")
+R3 = roc(y.test.c, probs3[,2])
+plot.roc(R3, add = TRUE, col=3, lwd=2)
+AUC3 = R3$auc
+```
+
+```{r}
+plot.roc(R1, col=1, lwd=2, main="ROC curves")
+plot.roc(R2, add = TRUE, col=2, lwd=2)
+plot.roc(R3, add = TRUE, col=3, lwd=2)
+```
+
