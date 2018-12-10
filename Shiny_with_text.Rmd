@@ -1,0 +1,66 @@
+---
+title: "Shiny_with_text"
+author: "Yuchen Hu"
+date: "12/9/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(wordcloud)
+library(tidyverse)   
+library(stringr)      
+library(tidytext)
+library(shiny)
+
+food <- read.csv("food_coded.csv",stringsAsFactors = FALSE) 
+
+food_health <- list("comfort_food" = "comfort_food",
+              "Reason for Having Comfort Food" = "comfort_food_reasons",
+              "Current Diet" = "diet_current",
+              "Change in Eating Habits" = "eating_changes",
+              "Food used to have in childhood" = "food_childhood",
+              "Perception of Healthy Meal" = "healthy_meal",
+              "Ideal diet" = "ideal_diet",
+              "Dinners to Have with Friends" = "meals_dinner_friend",
+              "Types of Sports" = "type_sports")
+
+getWords <- function(variable) {
+  if (!(variable %in% food_health))
+    stop("Unknown variable")
+
+  text <- food[,names(food) == variable] %>% 
+    str_to_lower() %>% 
+    str_split("\"\'(),|\\|/| ") %>%
+    unlist()
+  text <- text[!text %in% c('','and','i','when','am','or','they','i\'m','my','usually','are','a','/')]}
+
+u <- shinyUI(fluidPage(
+  titlePanel("Word Cloud"),
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("selection", "Choose a variable:",
+                  choices = food_health),
+      hr(),
+      sliderInput("freq",
+                  "Minimum Frequency:",
+                  min = 1,  max = 20, value = 5)),
+    mainPanel(plotOutput("plot")))))
+
+s <- shinyServer(
+  function(input, output, session) {
+  terms <- reactive({getWords(input$selection)})
+
+  wordcloud_rep <- repeatable(wordcloud)
+  output$plot <- renderPlot({
+    v <- terms()
+    wordcloud_rep(v, scale=c(4,0.5),
+                  min.freq = input$freq, 
+                  colors=brewer.pal(8, "Dark2"))})})
+
+shinyApp(ui = u,server = s)
+
+```
