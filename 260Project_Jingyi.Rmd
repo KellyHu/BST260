@@ -2,7 +2,9 @@
 title: "260Project_Jingyi"
 author: "Jingyi Huang"
 date: "2018/12/2"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -15,6 +17,9 @@ knitr::opts_chunk$set(echo = TRUE)
 library(corrplot)
 library(dplyr)
 library(tidyverse)
+library(ggjoy)
+library(devtools)
+library(ggplot2)
 
 ```
 
@@ -25,7 +30,8 @@ library(tidyverse)
 
 food=breakfast_clean <- readRDS("~/Desktop/BST260/data/breakfast_clean.rds")
 class(food$comfort_food_reasons_coded)
-
+class(food$GPA)
+class(food$weight)
 ```
 
 need to delete comfort food reasons.1 (pretty much identical to comfort food reasons )
@@ -45,10 +51,10 @@ Health feeling =1 marks the people who are most confident that they are healthy.
 food %>% 
   select(healthy_feeling,GPA)%>% 
     ggplot(aes( x=as.factor(healthy_feeling),y=GPA, color=as.factor(healthy_feeling))) +
-    geom_boxplot(width=0.5, color="grey", alpha=0.5) +
-  geom_violin(width=1.4)+
+    geom_boxplot(width=0.5, alpha=0.5) +
+  geom_jitter(size=3,alpha=.2)+
+  #geom_violin(width=1.4)+
   labs(color = "Healthy feeling\n")+
-    #geom_jitter(color="grey", size=0.7, alpha=0.5) +
    geom_point(show.legend = FALSE) +
     xlab("Healthy feeling") + 
     ylab("GPA") +
@@ -61,13 +67,47 @@ food %>%
 food %>% 
   select(fruit_day,GPA)%>% 
     ggplot(aes( x=as.factor(fruit_day),y=GPA, color=as.factor(fruit_day))) +
-    geom_boxplot(width=0.5, color="grey", alpha=0.5) +
-  geom_violin(width=1.4)+
+    geom_boxplot(width=0.5, alpha=0.5) +
+  geom_jitter(size=3,alpha=.2)+
+  #geom_violin(width=1.4)+
   labs(color = "Fruit\n")+
  geom_point(show.legend = FALSE) +
     xlab("Fruit") + 
     ylab("GPA") +
     ggtitle("Boxplots of GPA vs Fruit")
 
+
+
+
 ```
-#Shiny
+
+
+
+```{r}
+
+food %>% 
+  select(fruit_day,GPA)%>% 
+    ggplot(aes( y=fruit_day,x=GPA, group=as.factor(fruit_day),fill=as.factor(fruit_day)))+
+  geom_density_ridges()+
+  labs(color = "Fruit\n")+
+    ylab("Fruit") +
+    ggtitle("Distributions of GPA for different fruit intake per day")
+  
+  
+```
+
+#on/off campus
+```{r}
+food %>% 
+  select(on_off_campus,GPA)%>% 
+    ggplot(aes( x=as.factor(on_off_campus),y=GPA, color=as.factor(on_off_campus))) +
+    geom_boxplot(width=0.5, alpha=0.5) +
+  geom_jitter(size=3,alpha=.2)+
+  #geom_violin(width=1.4)+
+  labs(color = "On/off campus\n")+
+ geom_point(show.legend = FALSE) +
+    xlab("") + 
+    ylab("GPA") +
+    ggtitle("Boxplots of GPA vs ")
+```
+
