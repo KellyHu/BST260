@@ -41,7 +41,7 @@ getWords <- function(variable) {
   text <- text[!text %in% c('','and','i','when','am','or','they','i\'m','my','usually','are','a','/')]}
 
 u <- shinyUI(fluidPage(
-  titlePanel("Word Cloud"),
+  titlePanel("Word Cloud for text variables in our dataset"),
   sidebarLayout(
     sidebarPanel(
       selectInput("selection", "Choose a variable:",
@@ -75,10 +75,8 @@ library(tm)
 library(igraph)
 library(networkD3)
 
-w <- "240px"
-h <- "240px"
 u <- shinyUI(fluidPage(
-  titlePanel("NLP Graphs"),
+  titlePanel("Junk food and mental health with network analysis"),
 
   sidebarLayout(
     position = "left",
@@ -90,8 +88,8 @@ u <- shinyUI(fluidPage(
     mainPanel(
       h2("Network Graphs"),
       tabsetPanel(
-        tabPanel("Fruchterman-Reingold", plotOutput("fmr")),
-        tabPanel("Radial",radialNetworkOutput("radial"))
+        tabPanel("Radial",radialNetworkOutput("radial")),
+        tabPanel("Fruchterman-Reingold", plotOutput("fmr"))
       )
   )
 ))
