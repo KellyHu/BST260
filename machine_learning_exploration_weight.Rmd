@@ -1,7 +1,7 @@
 ---
-title: "machine_learning_exploration"
+title: "machine_learning_exploration_weight"
 author: "Dongyuan Song"
-date: "2018/12/5"
+date: "2018/12/10"
 output:
   html_document:
     toc: true
@@ -108,16 +108,16 @@ dat_trsf_nz_im[1:10, 1:10]
 
 ```{r}
 dat_trsf_nz_im %>% as.tibble() %>%
-  ggplot(aes(x = GPA)) +
+  ggplot(aes(x = weight)) +
   geom_histogram() +
   theme_bw()
-summary(dat_trsf_nz_im$GPA)
+summary(dat_trsf_nz_im$weight)
 ```
 
 Split data into train set and test set.
 ```{r}
 set.seed(1234)
-trainIndex <- createDataPartition(dat_trsf_nz_im$GPA, p = .8, 
+trainIndex <- createDataPartition(dat_trsf_nz_im$weight, p = .8, 
                                   list = FALSE, 
                                   times = 1)
 head(trainIndex)
@@ -127,7 +127,7 @@ head(trainIndex)
 Now we can generate formal training set and test set.
 ```{r}
 x.t <- dat_trsf_nz_im
-y.t <- dat_trsf_nz_im[, "GPA"]
+y.t <- dat_trsf_nz_im[, "weight"]
 ```
 
 ```{r}
@@ -150,12 +150,12 @@ stat.desc(y.train)
 
 ```{r, warning=TRUE}
 set.seed(123)
-models = c("knn","lm", "ridge", "lasso", "rf", "svmRadial", "glmboost", "xgbLinear", "nnet")
+models = c("knn","lm", "ridge", "lasso", "rf")
 train.control = trainControl(method = "repeatedcv", number = 5, repeats = 10, verbose = FALSE)
 
 n_models = length(models)
 for (m in 1:n_models) {
-    fit = train(GPA ~ ., method = models[m], trControl = train.control, data = x)
+    fit = train(weight ~ ., method = models[m], trControl = train.control, data = x)
     print(c(models[m], getTrainPerf(fit)))
     pre = predict(fit, newdata = x.test, type = "raw")
     mse_test <- sqrt(mean((y.test - pre)^2))
@@ -171,9 +171,9 @@ sqrt(mean((y.test - mean(y.train))^2))
 
 Since the continous outcome might be difficult to predict, we might consider convert it into binary outcome. 
 ```{r}
-dat_trsf_nz_im_c <- dat_trsf_nz_im %>% dplyr::mutate(GPA = GPA >= 3.5, GPA = as.factor(GPA))
+dat_trsf_nz_im_c <- dat_trsf_nz_im %>% dplyr::mutate(weight = weight >= 155, weight = as.factor(weight))
 x.c <- dat_trsf_nz_im_c
-y.c <- dat_trsf_nz_im_c[, "GPA"]
+y.c <- dat_trsf_nz_im_c[, "weight"]
 ```
 
 ```{r}
@@ -202,7 +202,7 @@ train.control = trainControl(method = "repeatedcv", number = 10, repeats = 10, v
 n_models = length(models)
 
 for (m in 1:n_models) {
-    fit = train(GPA ~ ., method = models[m], trControl = train.control, data = x.c)
+    fit = train(weight ~ ., method = models[m], trControl = train.control, data = x.c)
     print(c(models[m], getTrainPerf(fit)))
     pre = predict(fit, newdata = x.test.c, type = "raw")
     acc_test <- (mean(y.test.c == pre))
@@ -219,19 +219,19 @@ We also calculate the baseline acc.
 Notice that SVM does not generate probability. Here we compare KNN and Random Forest.
 ```{r}
 set.seed(123)
-fit_knn <- train(GPA ~ ., method = "knn", trControl = train.control, data = x.c)
+fit_knn <- train(weight ~ ., method = "knn", trControl = train.control, data = x.c)
 probs1 = predict(fit_knn, newdata = x.test.c, type = "prob")
 R1 = roc(y.test.c, probs1[,2])
 plot.roc(R1, col=1, lwd=2, main="ROC curves")
 AUC1 = R1$auc
 
-fit_rf <- train(GPA ~ ., method = "rf", trControl = train.control, data = x.c)
+fit_rf <- train(weight ~ ., method = "rf", trControl = train.control, data = x.c)
 probs2 = predict(fit_rf, newdata = x.test.c, type = "prob")
 R2 = roc(y.test.c, probs2[,2])
 plot.roc(R2, add = TRUE, col=2, lwd=2)
 AUC2 = R2$auc
 
-fit_lda <- train(GPA ~ ., method = "lda", trControl = train.control, data = x.c)
+fit_lda <- train(weight ~ ., method = "lda", trControl = train.control, data = x.c)
 probs3 = predict(fit_lda, newdata = x.test.c, type = "prob")
 R3 = roc(y.test.c, probs3[,2])
 plot.roc(R3, add = TRUE, col=3, lwd=2)
@@ -246,7 +246,7 @@ plot.roc(R3, add = TRUE, col=3, lwd=2)
 
 ```{r, fig.height=12}
 set.seed(1234)
-fit_rf <- train(GPA ~ ., method = "rf", trControl = train.control, data = x.c)
+fit_rf <- train(weight ~ ., method = "rf", trControl = train.control, data = x.c)
 plot(varImp(fit_rf, scale = FALSE))
 ```
 
