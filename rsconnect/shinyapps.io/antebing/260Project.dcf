@@ -5,9 +5,6 @@ account: antebing
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 611985
-bundleId: 1753970
+bundleId: 1754056
 url: https://antebing.shinyapps.io/260Project/
-when: 1544482762.32708
-asMultiple: FALSE
-asStatic: FALSE
-ignoredFiles: .RData|~$debook_food.docx|260Project.html|260Project.Rmd|260Project_Jingyi.html|260Project_Jingyi.pdf|260Project_Jingyi.Rmd|codebook_food.docx|data_preprocessing.Rmd|earth_RF.pdf|earth_RF.Rmd|FA.pdf|FA.Rmd|machine_learning_exploration.Rmd|machine_learning_exploration_weight.Rmd|NLP.pdf|NLP.Rmd|Rplot.png|Rplot01.pdf|Rplot02.png|260Project_Jingyi_files/figure-html/unnamed-chunk-3-1.png|260Project_Jingyi_files/figure-html/unnamed-chunk-4-1.png
+when: 1544485343.50329

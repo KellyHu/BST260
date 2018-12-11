@@ -1,0 +1,12 @@
+name: shiny_text_two
+title: shiny_text_two
+username:
+account: antebing
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 612996
+bundleId: 1754190
+url: https://antebing.shinyapps.io/shiny_text_two/
+when: 1544486754.20349
+asMultiple: FALSE
+asStatic: FALSE
