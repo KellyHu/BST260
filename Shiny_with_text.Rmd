@@ -3,10 +3,11 @@ title: "Shiny_with_text"
 author: "Yuchen Hu"
 date: "12/9/2018"
 output: pdf_document
+runtime: shiny
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(include = F)
 ```
 
 ## Word cloud and exploration
@@ -17,6 +18,7 @@ library(tidyverse)
 library(stringr)      
 library(tidytext)
 library(shiny)
+library(rsconnect)
 
 food <- read.csv("food_coded.csv",stringsAsFactors = FALSE) 
 
@@ -62,9 +64,8 @@ s <- shinyServer(
     wordcloud_rep(v, scale=c(4,0.5),
                   min.freq = input$freq, 
                   colors=brewer.pal(8, "Dark2"))})})
-
+runApp(appDir = getwd())
 shinyApp(ui = u,server = s)
-
 ```
 
 ## Junk food and mental health with network analysis
@@ -158,4 +159,5 @@ s <- shinyServer(
 )
 
 shinyApp(ui = u,server = s)
+runApp()
 ```
