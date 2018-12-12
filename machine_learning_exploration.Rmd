@@ -148,18 +148,19 @@ stat.desc(y.train)
 ```
 
 
-```{r, warning=TRUE}
+```{r, warning=FALSE}
 set.seed(123)
-models = c("knn","lm", "ridge", "lasso", "rf", "svmRadial", "glmboost", "xgbLinear", "nnet")
+models = c("knn","glm", "ridge", "lasso", "rf", "svmRadial")
 train.control = trainControl(method = "repeatedcv", number = 5, repeats = 10, verbose = FALSE)
 
 n_models = length(models)
 for (m in 1:n_models) {
     fit = train(GPA ~ ., method = models[m], trControl = train.control, data = x)
-    print(c(models[m], getTrainPerf(fit)))
+    cat(c(models[m], "\n"))
+    cat(c("Train RMSE", round(getTrainPerf(fit)$TrainRMSE, 3), "\t"))
     pre = predict(fit, newdata = x.test, type = "raw")
     mse_test <- sqrt(mean((y.test - pre)^2))
-    print(mse_test)
+    cat(c("Test RMSE", round(mse_test, 3), "\n"))
 }
 ```
 
@@ -203,10 +204,11 @@ n_models = length(models)
 
 for (m in 1:n_models) {
     fit = train(GPA ~ ., method = models[m], trControl = train.control, data = x.c)
-    print(c(models[m], getTrainPerf(fit)))
+    cat(c(models[m], "\n"))
+    cat(c("Train Accuracy", round(getTrainPerf(fit)$TrainAccuracy, 3), "\t"))
     pre = predict(fit, newdata = x.test.c, type = "raw")
     acc_test <- (mean(y.test.c == pre))
-    print(acc_test)
+    cat(c("Test Accuracy", round(acc_test, 3), "\n"))
 }
 ```
 
@@ -222,29 +224,27 @@ set.seed(123)
 fit_knn <- train(GPA ~ ., method = "knn", trControl = train.control, data = x.c)
 probs1 = predict(fit_knn, newdata = x.test.c, type = "prob")
 R1 = roc(y.test.c, probs1[,2])
-plot.roc(R1, col=1, lwd=2, main="ROC curves")
+#plot.roc(R1, col=1, lwd=2, main="ROC curves")
 AUC1 = R1$auc
 
 set.seed(123)
 fit_glm <- train(GPA ~ ., method = "glm", trControl = train.control, data = x.c)
 probs2 = predict(fit_glm, newdata = x.test.c, type = "prob")
 R2 = roc(y.test.c, probs2[,2])
-plot.roc(R2, col=1, lwd=2, add = TRUE)
+#plot.roc(R2, col=1, lwd=2, add = TRUE)
 AUC2 = R2$auc
 
 fit_rf <- train(GPA ~ ., method = "rf", trControl = train.control, data = x.c)
 probs3 = predict(fit_rf, newdata = x.test.c, type = "prob")
 R3 = roc(y.test.c, probs3[,2])
-plot.roc(R3, add = TRUE, col=2, lwd=2)
+#plot.roc(R3, add = TRUE, col=2, lwd=2)
 AUC3 = R3$auc
 
 fit_lda <- train(GPA ~ ., method = "lda", trControl = train.control, data = x.c)
 probs4 = predict(fit_lda, newdata = x.test.c, type = "prob")
 R4 = roc(y.test.c, probs4[,2])
-plot.roc(R4, add = TRUE, col=3, lwd=2)
+#plot.roc(R4, add = TRUE, col=3, lwd=2)
 AUC4 = R4$auc
-
-
 ```
 
 Generate ROC curves

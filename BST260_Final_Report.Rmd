@@ -1,0 +1,484 @@
+---
+title: "260Project"
+author: "Jingyi Huang, Yuchan Hu, Ante Bing, Dongyuan Song"
+date: "2018/12/2"
+output:
+  html_document:
+    df_print: paged
+---
+```{r}
+library(tidyverse)
+library(caret)
+library(pROC)
+library(plotROC)
+library(pastecs)
+library(ggcorrplot)
+library(MASS)
+library(leaps)
+library(data.table)
+library(psych)
+library(nFactors)
+library(reshape2)
+library(randomForest)
+```
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+An important part of your project is the RMarkdown and HTML files. This will detail your steps in developing your solution, including how you collected the data, alternative solutions you tried, describing statistical methods you used, and the insights you got. Equally important to your final results is how you got there! Your RMarkdown and HTML files are the place you describe and document the space of possibilities you explored at each step of your project. We strongly advise you to include many visualizations.
+
+## Overview and Motivation
+Provide an overview of the project goals and the motivation for it. Consider that this will be read by people who did not see your project proposal.
+
+Motivation: It is widely acknowledged that students at colleges can sometimes be stressful. Most of them are eager to get good grades to better prepare themselves for future careers and academic developments. This is especially true for HCSPH students. Not only do we care about our grades, but we also care about our health. Sacrificing our health to achieve better grades cannot be a viable option. While a healthy diet is generally assumed to be important for good school performance, there has actually been little research on this topic. 
+
+Goal: we aim to explore the relationship between food preferences and GPA, as a way to highlight the importance of healthy diet and eating habits. More specifically, we looked at different categories of information such as: food choices, comfort food types, food calories, and how they relate to students' GPA level. In addition, we built models to try to predict students' GPA using their diet related information.  
+
+
+## Related Work
+Anything that inspired you, such as a paper, a website, or something we discussed in class.
+
+An article published in the Journal of School Health (2008) found that students who ate an adequate amount of fruit, vegetables, protein, fiber and other components of a healthy diet were significantly less likely to fail a literacy test. Similarly, Charles Basch, from Columbia University listed breakfast as one of the seven factors that can contribute to students' performances in school (Journal of school health, 2011). 
+
+##Initial Questions
+What questions are you trying to answer? How did these questions evolve over the course of the project? What new questions did you consider in the course of your analysis?
+
+How food choices, comfort food types, food calories and etc. relate to students' GPA level and weight?
+
+
+
+##Data
+Source, scraping method, cleanup, etc.
+
+The original dataset and its description can be found on Kaggle:       https://www.kaggle.com/borapajo/food-choices. The original dataset contains 125 observations and 61 covariates. Since our data contains questionnaire answers, we used string processing method taught in class to start screening their text answers. Among the covariates, majority of them are categorical or ordinal. There is also a few covariates corresponding to the short answer questions in the questionnaire. We firstly removed the duplicated columns and converted integer type covariates into categorical type covariates. Then we manually deleted some observation values due to obvious data entry error. The cleaned version of the dataset is attached here:     https://goo.gl/9XSRNf
+We also used NLP to illustrate the relationship between comfort/junk food and mental health (junk food and mental health with network analysis) using RShiny.
+
+We first re-read in original data. 
+```{r}
+dat <- read_csv("./data/food_coded_clean.csv", na = "nan")
+```
+We notice that here is some duplicated columns. Filter out those columns.
+```{r}
+dat <- dat %>% dplyr::select( - ends_with("_1"))
+```
+For `chr` column, we remove them temporarily and leave it for NLP. For `int` column we convert them all into `fct` (although some of them are close to ordinary categorical data).
+```{r}
+weight_vector <- dat$weight
+dat <- dat %>% dplyr::mutate_if(is.integer, as.factor) %>%
+  dplyr::select_if(function(x) !is.character(x)) %>%
+  dplyr::mutate(weight = as.numeric(weight_vector))
+```
+
+
+##Exploratory Analysis
+What visualizations did you use to look at your data in different ways? What are the different statistical methods you considered? Justify the decisions you made, and show any major changes to your ideas. How did you reach these conclusions?
+
+
+We tried to use correlation plots which are usually used for continuous variables vs continuous variables to test collinearity. However, most of our covariates are categorical variables, so we decide to first use distribution plots and box plots to illustrate the relationship between our continuous dependent variable (GPA) and categorical independent variables (healthy feeling, fruit intake and etc).
+
+```{r}
+food %>% 
+  select(fruit_day,GPA)%>% 
+    ggplot(aes( y=fruit_day,x=GPA, group=as.factor(fruit_day),fill=as.factor(fruit_day)))+
+  geom_density_ridges()+
+  labs(color = "Fruit\n")+
+    ylab("Fruit") +
+    ggtitle("Distributions of GPA for different fruit intake per day") 
+```
+
+Taking a moderate amount of fruit (Fruit intake=3) associates with larger GPA for most of the people (the peak of its distribution appears to be the most right-sided on the x-axis among other fruit intake scenarios).
+
+```{r}
+food %>% 
+  select(healthy_feeling,GPA)%>% 
+    ggplot(aes( x=as.factor(healthy_feeling),y=GPA, color=as.factor(healthy_feeling))) +
+    geom_boxplot(width=0.5, alpha=0.5) +
+  geom_jitter(size=3,alpha=.2)+
+  #geom_violin(width=1.4)+
+  labs(color = "Healthy feeling\n")+
+   geom_point(show.legend = FALSE) +
+    xlab("Healthy feeling") + 
+    ylab("GPA") +
+    ggtitle("Boxplots of GPA vs Healthy feeling")
+```
+
+Health feeling =1 marks the people who are most confident that they are healthy. As we can see from the box plots, people who are the most confident about their health condition associated with higher GPA (the median is the highest among the 10 rating categories).
+
+### Exploratory Factor Analysis
+
+It could be noticed that we have a large set of covariates comparing to the number of observations we have. It's possible that a lot of covariates in our datasets are highly correlated, and they might be jointly characterized by some latent factors.
+
+```{r message=FALSE, warning=FALSE}
+food <- read.csv("food_coded.csv",stringsAsFactors = FALSE) 
+#summary(food)
+food <- read.csv("./data/food_coded_clean.csv", na = "nan")
+food <- food %>% dplyr::select( - ends_with("_1"))
+food <- food %>% dplyr::mutate_if(is.integer, as.factor) %>%
+  dplyr::select_if(function(x) !is.character(x))
+```
+
+We start by filtering out all the numerical values in our dataframe. To decide the optimal number of factors to include in our model, we start by calculating the eigenvalues and ploting the scree plot.
+
+```{r}
+food_numeric <- food[,-c(8,9,14,17,25,26,29,35,36,43,45,57)]
+food_numeric <- food_numeric[complete.cases(food_numeric), ] %>%
+  lapply(function(x) as.numeric(as.character(x)))
+food_numeric <- as.data.frame(do.call(cbind, food_numeric))
+ev <- eigen(cor(food_numeric))
+ap <- parallel(subject=nrow(food_numeric),var=ncol(food_numeric),
+               rep=100,cent=.05)
+nS <- nScree(x=ev$values, aparallel=ap$eigen$qevpea)
+plotnScree(nS)
+```
+
+It seems that we may choose to include 7 factors in our model. 
+
+```{r message=FALSE, warning=FALSE}
+fa_numeric <- fa(food_numeric, 7)
+summary(fa_numeric)
+fa.diagram(fa_numeric,side=1) 
+```
+
+From the factor diagram, we may figure out some interpretation for the latent factors by the main variables contributing to them. For factor 1, it's mainly composed of variables explaining the individual preference towards different types of cuisine. For factor 2, it's mainly composed of variables related to individual's daily eating habits. Factor 3 explains individual's choice in terms of comfort food, and factor 4 characterizes how well people did in guessing the calories of different food. Factor 5 focuses on some more general information on the individual's social background, and factor 6 explains individual's demographic information. Finally, factor 7 reflects how people feel about their life.
+
+The dimension could thus be reduced by replacing the covariates by the factor loadings. According to the interpretation of the variables, we define the 7 factors as "food_choices", "eating_habits", "comfort_food", "calories_guess", "social_background", "demographic_information", and "life_feeling" respectively.
+
+```{r}
+# plot the result
+gathering <- as.data.frame(matrix(nrow = dim(food_numeric)[2], ncol =7))
+gathering$Variable <- colnames(food_numeric)
+for (i in 1:7) {
+  for (j in 1:dim(food_numeric)[2]) {
+    gathering[j, i] <- fa_numeric$loadings[j, i]  
+  }
+}
+colnames(gathering) <- c("food_choices", "eating_habits", "comfort_food", 
+                         "calories_guess", "social_background", 
+                         "demographic_information", "life_feeling", "Variable")
+gathering <- gathering %>% gather("Factor", "Value", 1:7)
+ggplot(gathering, aes(Variable, abs(Value), fill=Factor)) + 
+  geom_bar(stat="identity") + coord_flip() + 
+  ylab("Factor Loading") + 
+  theme_bw(base_size=8) 
+```
+
+
+
+
+## Interpretation Model
+For convenience reasons, we first created dummy variables for all of the categorical covariates in the dataset. We then removed the highly correlated covariates using cutoff value at 0.9. As for missing values, we couldn't remove the missing rows because there were less than half of the observations are completed cases. We decided to use median imputations since considering the sample size, it is also inappropriate to assume other types of underlying distributions for the observed values.
+
+
+```{r}
+dat_dummy <- dummyVars(" ~ .", data = dat, fullRank = T)
+head(dat_dummy)
+dat_trsf <- data.frame(predict(dat_dummy, newdata = dat))
+
+nzv <- nearZeroVar(dat_trsf, saveMetrics= TRUE)
+nzv[nzv$nzv,]
+#Unluckily, there are some near zero-variance factors. We remove them.
+
+nzv <- nearZeroVar(dat_trsf)
+dat_trsf_nz <- dat_trsf[, -nzv]
+descrCor <- cor(dat_trsf_nz, use = "pairwise.complete.obs")
+#summary(descrCor[upper.tri(descrCor)])
+
+# remove highly correlated columns
+highlyCorDescr <- findCorrelation(descrCor, cutoff = .9)
+dat_trsf_nz <- dat_trsf_nz[,-highlyCorDescr]
+descrCor2 <- cor(dat_trsf_nz, use = "pairwise.complete.obs")
+#summary(descrCor2[upper.tri(descrCor2)])
+
+# median imputation
+prepo <- preProcess(dat_trsf_nz, method = c("medianImpute"), na.remove = TRUE)
+imp_dat_trsf_nz <- predict(prepo, dat_trsf_nz)
+```
+
+We did our model fitting under two scenarios, one is to consider GPA as a continuous outcome, while the other is to consider it as a categorical outcome. For the continuous case, we utilized LASSO regression to do feature selection. 
+
+```{r}
+# LASSO
+c_cv <- cv.glmnet(as.matrix(imp_dat_trsf_nz[-1]), as.matrix(imp_dat_trsf_nz[,1]), standardize = T, alpha = 1)
+tmp_coeffs <- coef(c_cv, s = "lambda.min")
+tmp_coeffs
+plot(c_cv)
+```
+However, none of the covariates were selected into the final model (Please see the HTML file for detail). Then, we used stepwise selection using BIC as criteria. 
+
+```{r}
+null <- lm(GPA~1,data=imp_dat_trsf_nz)
+full <- lm(GPA~.,data=imp_dat_trsf_nz)
+step_leap <- step(null, scope=list(lower=null, upper=full), direction="both", k = log(125))
+summary(step_leap)
+```
+
+
+Four covariates turned out to be statistically significant (p < 0.05). Those covariates are: 1. if students' father went to graduate school 2. if students are very likely to eat Thai food when its available  3. if students are unlikely to eat Greek food when it is available 4. if students' favorite food are either Italian, French or Greek food. 
+
+For the categorical case, we separated GPA into two categories: below 3.5 and above 3.5. We selected this cutoff value because the median GPA value is around 3.5. Similarly, we carried out both LASSO and step-wise selections. 
+```{r}
+dat_trsf_nz_im_c <- imp_dat_trsf_nz %>% dplyr::mutate(GPA = GPA >= 3.5, GPA = as.factor(GPA))
+
+# LASSO
+c_cv <- cv.glmnet(as.matrix(dat_trsf_nz_im_c[-1]), as.matrix(dat_trsf_nz_im_c[,1]),family="binomial", standardize = T, alpha = 1)
+tmp_coeffs <- coef(c_cv, s = "lambda.min")
+tmp_coeffs
+plot(c_cv)
+```
+LASSO returned three covariates: 1. if students' father went to graduate school 2. if students' father went to college 3. if students exercise exactly once per week. 
+
+
+```{r}
+# step wise
+null <- glm(GPA~1,data=dat_trsf_nz_im_c, family = binomial)
+full <- glm(GPA~.,data=dat_trsf_nz_im_c, family=binomial)
+stepmodel = step(null,scope=list(lower=formula(null),upper=formula(full)),
+ direction="both", k=log(125))
+summary(stepmodel)
+```
+
+Step-wise selections returned more than a few significant covariates. Some of the highly significant ones include: 1. if the students are highly likely to eat ethnic food 2. if the students are unlikely to eat Greek food when it is avaliable 3. if the students have been eating more since they got into college. 
+
+In general, if we only focus on continuous GPA, the covariate: "if students' father went to graduate school" is an interesting case. The reason is that this covariate is negatively related to students' GPA. 
+
+```{r}
+food <- dat
+food %>%  
+  ggplot(aes(x=as.factor(father_education),y=GPA, color=as.factor(father_education)))+ geom_boxplot(width=0.5,  alpha=0.5)+ xlab("Father Education Level") + geom_jitter(size=3,alpha=.2) +
+	ylab("GPA") +
+	ggtitle("Boxplots of GPA vs Father Education Level") + theme_bw() +labs(color='Father Education Level') +scale_color_hue(labels = c("less than high school", "high school", "associate degree", "college degree", "graduate degree", "prefer not to say"))
+
+```
+Additionally, if we only consider categorical GPA as the outcome, another interesting case is students' love toward ethnic food, which seems to be positively related to GPA. 
+
+```{r}
+food <- dat
+food %>%  
+  ggplot(aes(x=as.factor(ethnic_food),y=GPA, color=as.factor(ethnic_food)))+ geom_boxplot(width=0.5,  alpha=0.5)+ xlab("How likely to eat ethnic food") + geom_jitter(size=3,alpha=.2) +
+	ylab("GPA") +
+	ggtitle("Boxplots of GPA vs How Likely to Eat Ethnic Food") + theme_bw() +labs(color='How likely to eat ethnic food') +scale_color_hue(labels = c("very unlikely", "unlikely", "neutral", "likely", "very likely", "N/A"))
+
+```
+Although the sample size is small, we can still detect some trend here. Since students' love toward ethnic food might be related to their background, culture or heritage, it is not surprising to identify a trend here.
+
+To further looking into the available variables, we also performed random forest to calculate variable importance.
+
+```{r}
+set.seed(1234)
+fit_rf <- randomForest(GPA ~ .,data = imp_dat_trsf_nz)
+varImpPlot(fit_rf, type = 2 , main = "Variable Importance based on Random Forest",n.var = 10)
+```
+The random forest plot depicts some of the variables and their "IncNodePurity", which is the total decrease in node impurities, measured by the Gini Index from splitting on the variable, averaged over all trees. These selected variables are the top variables with highest incNodePurity values. A simpler way of reading this plot would be, the higher the IncNodePurity value for a variable, the more important that variable is to our dependent variable - GPA.  
+
+Weight is the variable that grabbed our attention. We are not sure why it was not picked up through step-wise selection or LASSO. We plotted GPA vs Weight to look into this problem.
+```{r}
+food %>%  
+  ggplot(aes(x=as.numeric(weight),y=as.numeric(GPA)))+ geom_smooth(method='lm',formula=y~x)+ xlab("Weight") + geom_jitter(size=3,alpha=.2) +
+	ylab("GPA") +
+	ggtitle("GPA vs Weight") + theme_bw()
+```
+
+The blue line in this plot is a smoothing spline. It is quite obvious to us that there is probably no actual linear relationship between GPA and weight. Since random forest does not perform that well with small dataset, it is possible that with more observations, random forest would not show weight as a variable with high importance. 
+
+
+
+
+## Prediction Model
+One main interest is to use our food data to predict GPA. From Interpretation model, we find that the association between GPA and other variables is quite weak. However, can we use some machine learning model, especially non-linear model, such as KNN and SVM, to predict GPA effectively?
+
+### Data Preprocessing
+We have performed standard data preprocessing in last step. 
+We now want to create training data and test data.
+Split data into train set and test set.
+```{r}
+dat_trsf_nz_im <- imp_dat_trsf_nz
+set.seed(123)
+trainIndex <- createDataPartition(dat_trsf_nz_im$GPA, p = .8, 
+                                  list = FALSE, 
+                                  times = 1) 
+x.t <- dat_trsf_nz_im
+y.t <- dat_trsf_nz_im[, "GPA"]
+y.train <- y.t[trainIndex]
+y.test <- y.t[-trainIndex]
+x.train <- x.t[trainIndex,]
+x.test <- x.t[-trainIndex,]
+x <- x.train
+y <- y.train
+```
+### Continuous GPA
+We first treat GPA as a continuous variable. We tried several “regression” model: "knn", "glm", "ridge", "lasso", "rf", "svmRadial".
+```{r, warning=FALSE}
+set.seed(123)
+models = c("knn", "glm", "ridge", "lasso", "rf", "svmRadial")
+train.control = trainControl(method = "repeatedcv", number = 5, repeats = 10, verbose = FALSE)
+
+n_models = length(models)
+for (m in 1:n_models) {
+    fit = train(GPA ~ ., method = models[m], trControl = train.control, data = x)
+    cat(c(models[m], "\n"))
+    cat(c("Train RMSE", round(getTrainPerf(fit)$TrainRMSE, 3), "\t"))
+    pre = predict(fit, newdata = x.test, type = "raw")
+    mse_test <- sqrt(mean((y.test - pre)^2))
+    cat(c("Test RMSE", round(mse_test, 3), "\n"))
+}
+```
+We also use the naive mean of training set to calculate RMSE on test set.
+```{r}
+sqrt(mean((y.test - mean(y.train))^2))
+```
+This is quite embarrassing: simple Mean actually beats all predictive models, which means they did not work at all.
+
+
+### Binary GPA
+Since the continuous outcome might be difficult to predict, we might consider converting it into binary outcome. We check if the binary outcome is more predictable.
+
+We first generate binary outcome data.
+```{r}
+dat_trsf_nz_im_c <- dat_trsf_nz_im %>% dplyr::mutate(GPA = GPA >= 3.5, GPA = as.factor(GPA))
+x.c <- dat_trsf_nz_im_c
+y.c <- dat_trsf_nz_im_c[, "GPA"]
+y.train.c <- y.c[trainIndex]
+y.test.c <- y.c[-trainIndex]
+
+x.train.c <- x.c[trainIndex,]
+x.test.c <- x.c[-trainIndex,]
+x.c <- x.train.c
+y.c <- y.train.c
+```
+
+We tried several “classification” models: "knn", "rf", "glm", "lda",  "svmLinear", "svmRadial".
+
+
+```{r}
+set.seed(123)
+
+models = c("knn", "rf", "glm", "lda",  "svmLinear", "svmRadial")
+train.control = trainControl(method = "repeatedcv", number = 10, repeats = 10, verbose = FALSE)
+
+n_models = length(models)
+
+for (m in 1:n_models) {
+    fit = train(GPA ~ ., method = models[m], trControl = train.control, data = x.c)
+    cat(c(models[m], "\n"))
+    cat(c("Train Accuracy", round(getTrainPerf(fit)$TrainAccuracy, 3), "\t"))
+    pre = predict(fit, newdata = x.test.c, type = "raw")
+    acc_test <- (mean(y.test.c == pre))
+    cat(c("Test Accuracy", round(acc_test, 3), "\n"))
+}
+```
+All results seem to be not quite satisfying; we check further in the ROC curves. We chose “glm”, “knn”, “rf” and “lda” (“svm” does not provide ROC curve).
+```{r}
+set.seed(123)
+fit_knn <- train(GPA ~ ., method = "knn", trControl = train.control, data = x.c)
+probs1 = predict(fit_knn, newdata = x.test.c, type = "prob")
+R1 = roc(y.test.c, probs1[,2])
+#plot.roc(R1, col=1, lwd=2, main="ROC curves")
+AUC1 = R1$auc
+
+set.seed(123)
+fit_glm <- train(GPA ~ ., method = "glm", trControl = train.control, data = x.c)
+probs2 = predict(fit_glm, newdata = x.test.c, type = "prob")
+R2 = roc(y.test.c, probs2[,2])
+#plot.roc(R2, col=1, lwd=2, add = TRUE)
+AUC2 = R2$auc
+
+fit_rf <- train(GPA ~ ., method = "rf", trControl = train.control, data = x.c)
+probs3 = predict(fit_rf, newdata = x.test.c, type = "prob")
+R3 = roc(y.test.c, probs3[,2])
+#plot.roc(R3, add = TRUE, col=2, lwd=2)
+AUC3 = R3$auc
+
+fit_lda <- train(GPA ~ ., method = "lda", trControl = train.control, data = x.c)
+probs4 = predict(fit_lda, newdata = x.test.c, type = "prob")
+R4 = roc(y.test.c, probs4[,2])
+#plot.roc(R4, add = TRUE, col=3, lwd=2)
+AUC4 = R4$auc
+```
+```{r}
+test <- data.frame(D = y.test.c, knn = probs1[,2], glm = probs2[,2], rf = probs3[,2], lda = probs4[,2])
+head(test)
+test <- test %>% tidyr::gather(key = Model, value = M, -D)
+```
+```{r}
+ggplot(data = test, aes(d = D, m = M, color = Model, linetype = Model)) +
+  geom_roc(n.cuts = 0) + 
+  geom_abline(slope = 1, intercept = 0, alpha = 1, color = "grey") +
+  theme_bw() +
+  ggtitle("ROC Curve for GPA Prediction")
+```
+From the ROC curves we can see that those models are not very predictive.
+
+Hence, using our food data to predict GPA is not a good idea. It is possible that our sample size is too small; it can also be explained that GPA actually has a weak relationship with food. To check if our machine learning model works, we tried to use the same models to predict weights and hope that it will yield better results compared with GPA.  
+
+## Predicting Weights
+We used the exact same data and models to predict weights.  
+To make results comparable with GPA, here we also convert weight into a binary outcomes (>155 lb).
+```{r}
+dat_trsf_nz_im_c <- dat_trsf_nz_im %>% dplyr::mutate(weight = weight >= 155, weight = as.factor(weight))
+x.c <- dat_trsf_nz_im_c
+y.c <- dat_trsf_nz_im_c[, "weight"]
+y.train.c <- y.c[trainIndex]
+y.test.c <- y.c[-trainIndex]
+x.train.c <- x.c[trainIndex,]
+x.test.c <- x.c[-trainIndex,]
+x.c <- x.train.c
+y.c <- y.train.c
+```
+We used same models as we did for GPA.
+
+```{r}
+ggplot(data = test, aes(d = D, m = M, color = Model, linetype = Model)) +
+  geom_roc(n.cuts = 0) + 
+  geom_abline(slope = 1, intercept = 0, alpha = 1, color = "grey") +
+  theme_bw() +
+  ggtitle("ROC Curve for Weight Prediction")
+```
+We can see that the model performs much better. Therefore, our machine learning methods do work for predicting weights.
+
+
+
+## Conclusion
+
+From our interpretation model, a few variables such as father education, students’ preferences toward ethnic food, and exercise frequency are statistically significant predictors for GPA. We then moved on to construct prediction models, because all of our group members are interested to see if what we have are sufficient to predict or classify students' GPA. 
+
+From our prediction model, we could not use our food data to predict GPA (for both continuous GPA and binary GPA). Our machine learning methods face several challenges: small sample size, sparsity, and vigorous categories. However, using the same data and models to predict weights does yield effective prediction. We tend to believe that the bad performance using food to predict GPA is caused by their no association.
+
+
+## Discussion
+
+Sample size is one of our biggest limitations for this study. Given a small dataset like this, it’s hard to have very satisfying results, especially from machine learning models. Besides, we have concerns about the quality of data because the questionnaires were only collected within one college in the US, so that the data might not be representative enough for all the college students. Also, students may be reluctant to report their true GPA to the questionnaires, which might make our data less reliable. In the future, we may search for more non-parametric methods that work well on small data sets and other methods to deal with missing data.
+
+
+## References
+
+Diet Quality and Academic Performance (2008)
+Michelle D. Florence MSc, PDt  Mark Asbridge PhD  Paul J. Veugelers PhD
+
+Healthier Students Are Better Learners: A Missing Link in School Reforms to Close the Achievement Gap (2011)
+CHARLES E. BASCH, PhD
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
