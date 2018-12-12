@@ -257,8 +257,9 @@ test <- test %>% tidyr::gather(key = Model, value = M, -D)
 ```{r}
 ggplot(data = test, aes(d = D, m = M, color = Model, linetype = Model)) +
   geom_roc(n.cuts = 0) + 
+  geom_abline(slope = 1, intercept = 0, alpha = 1, color = "grey") +
   theme_bw() +
-  ggtitle("ROC Curve for weight Prediction")
+  ggtitle("ROC Curve for Weight Prediction")
 ```
 
 ```{r, fig.height=12}
