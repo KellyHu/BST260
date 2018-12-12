@@ -196,7 +196,7 @@ mean(as.numeric(y.train.c) - 1)
 ```{r}
 set.seed(123)
 
-models = c("knn", "rf", "glm", "lda",  "sparseLDA", "svmLinear", "svmRadial", "svmRadialWeights")
+models = c("knn", "rf", "glm", "lda", "svmLinear", "svmRadial")
 train.control = trainControl(method = "repeatedcv", number = 10, repeats = 10, verbose = FALSE)
 
 n_models = length(models)
@@ -225,23 +225,40 @@ R1 = roc(y.test.c, probs1[,2])
 plot.roc(R1, col=1, lwd=2, main="ROC curves")
 AUC1 = R1$auc
 
-fit_rf <- train(weight ~ ., method = "rf", trControl = train.control, data = x.c)
-probs2 = predict(fit_rf, newdata = x.test.c, type = "prob")
+set.seed(123)
+fit_glm <- train(weight ~ ., method = "glm", trControl = train.control, data = x.c)
+probs2 = predict(fit_glm, newdata = x.test.c, type = "prob")
 R2 = roc(y.test.c, probs2[,2])
-plot.roc(R2, add = TRUE, col=2, lwd=2)
+plot.roc(R2, col=1, lwd=2, add = TRUE)
 AUC2 = R2$auc
 
-fit_lda <- train(weight ~ ., method = "lda", trControl = train.control, data = x.c)
-probs3 = predict(fit_lda, newdata = x.test.c, type = "prob")
+fit_rf <- train(weight ~ ., method = "rf", trControl = train.control, data = x.c)
+probs3 = predict(fit_rf, newdata = x.test.c, type = "prob")
 R3 = roc(y.test.c, probs3[,2])
-plot.roc(R3, add = TRUE, col=3, lwd=2)
+plot.roc(R3, add = TRUE, col=2, lwd=2)
 AUC3 = R3$auc
+
+fit_lda <- train(weight ~ ., method = "lda", trControl = train.control, data = x.c)
+probs4 = predict(fit_lda, newdata = x.test.c, type = "prob")
+R4 = roc(y.test.c, probs4[,2])
+plot.roc(R4, add = TRUE, col=3, lwd=2)
+AUC4 = R4$auc
+
+
+```
+
+Generate ROC curves
+```{r}
+test <- data.frame(D = y.test.c, knn = probs1[,2], glm = probs2[,2], rf = probs3[,2], lda = probs4[,2])
+head(test)
+test <- test %>% tidyr::gather(key = Model, value = M, -D)
 ```
 
 ```{r}
-plot.roc(R1, col=1, lwd=2, main="ROC curves")
-plot.roc(R2, add = TRUE, col=2, lwd=2)
-plot.roc(R3, add = TRUE, col=3, lwd=2)
+ggplot(data = test, aes(d = D, m = M, color = Model, linetype = Model)) +
+  geom_roc(n.cuts = 0) + 
+  theme_bw() +
+  ggtitle("ROC Curve for weight Prediction")
 ```
 
 ```{r, fig.height=12}
