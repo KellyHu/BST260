@@ -16,18 +16,20 @@ An important part of your project is the RMarkdown and HTML files. This will det
 ## Overview and Motivation
 Provide an overview of the project goals and the motivation for it. Consider that this will be read by people who did not see your project proposal.
 
-It is widely acknowledged that students at colleges can sometimes be stressful because they are eager to get good grades to prepare better for their future career or academic development.  As the students from the school of Public Health at Harvard University, not only do we care about our grades, but we also want to make sure that college students are in healthy condition while pursuing  good GPAs.  Therefore, we are interested in how nutrition information is associated with the pressure and GPA of college kids. 
+Motivation: It is widely acknowledged that students at colleges can sometimes be stressful. Most of them are eager to get good grades to better prepare themselves for future careers and academic developments. This is especially true for HCSPH students. Not only do we care about our grades, but we also care about our health. Sacrificing our health to achieve better grades cannot be a viable option. While a healthy diet is generally assumed to be important for good school performance, there has actually been little research on this topic. 
 
-
+Goal: we aim to explore the relationship between food preferences and GPA, as a way to highlight the importance of healthy diet and eating habits. More specifically, we looked at different categories of information such as: food choices, comfort food types, food calories, and how they relate to students' GPA level. In addition, we built models to try to predict students' GPA using their diet related information.  
 
 
 ## Related Work
 Anything that inspired you, such as a paper, a web site, or something we discussed in class.
 
+An article published in the Journal of School Health (2008) found that students who ate an adequate amount of fruit, vegetables, protein, fiber and other components of a healthy diet were significantly less likely to fail a literacy test. Similarly, Charles Basch, from Columbia University listed breakfast as one of the seven factors that can contribute to students' performances in school (Journal of school health, 2011). 
 
 ##Initial Questions
 What questions are you trying to answer? How did these questions evolve over the course of the project? What new questions did you consider in the course of your analysis?
 
+How food choices, comfort food types, food calories relate to students' GPA level and weight?
 
 
 
@@ -49,6 +51,8 @@ What visualizations did you use to look at your data in different ways? What are
 
 ##Final Analysis
 What did you learn about the data? How did you answer the questions? How can you justify your answers?
+
+
 
 
 
