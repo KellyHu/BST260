@@ -5,6 +5,16 @@ library(NLP)
 library(tm)
 library(igraph)
 library(networkD3)
+library(rsconnect)
+library(wordcloud)
+library(tidyverse)   
+library(stringr)      
+library(tidytext)
+
+
+food <- read.csv("food_coded.csv",stringsAsFactors = FALSE) 
+data <- food[,names(food) %in% c("comfort_food","comfort_food_reasons")] 
+data <- do.call(paste, c(food[c("comfort_food", "comfort_food_reasons")], sep = ". ")) %>% str_to_lower()
 s <- shinyServer(
   function(input, output)
   {

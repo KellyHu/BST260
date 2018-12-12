@@ -69,6 +69,9 @@ s <- shinyServer(
 
 shinyApp(ui = u,server = s)
 
+
+# upload
+deployApp()
 ```
 
 For example, under `perception of Healthy Meal`, we see a lot of `protein`, `vegetables` and `fruit`, while under `Comfort Food`, there are mainly `ice cream`, `pizza`, and `chocolate`.

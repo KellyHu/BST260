@@ -5,6 +5,6 @@ account: antebing
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 611985
-bundleId: 1754056
+bundleId: 1754547
 url: https://antebing.shinyapps.io/260Project/
-when: 1544485343.50329
+when: 1544497774.62285

@@ -1,0 +1,224 @@
+---
+title: "Interpretation modeling"
+output: html_document
+---
+# lasso 
+```{r}
+library(glmnet)
+library(caret)
+```
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, 
+                      root.dir = "", 
+                      fig.width = 8, fig.height = 6)
+```
+
+
+```{r}
+dat <- read.csv("data/food_coded_clean.csv", na = "nan")
+
+head(dat)
+
+#We notice that here is some duplicated columns. Filter out those columns.
+dat <- dat %>% dplyr::select( - ends_with("_1"))
+
+head(dat)
+
+#For `chr` column, we remove them. For `int` column we convert them all into `fct` (although some of them are nearly ordinary categorical data).
+dat <- dat %>% dplyr::mutate_if(is.integer, as.factor) %>%
+  dplyr::select_if(function(x) !is.character(x)) %>% dplyr::mutate(weight=as.numeric(weight))
+
+dat_dummy <- dummyVars(" ~ .", data = dat, fullRank = T)
+head(dat_dummy)
+dat_trsf <- data.frame(predict(dat_dummy, newdata = dat))
+
+nzv <- nearZeroVar(dat_trsf, saveMetrics= TRUE)
+nzv[nzv$nzv,]
+#Unluckily, there are some near zero-variance factors. We remove them.
+
+nzv <- nearZeroVar(dat_trsf)
+dat_trsf_nz <- dat_trsf[, -nzv]
+descrCor <- cor(dat_trsf_nz, use = "pairwise.complete.obs")
+#summary(descrCor[upper.tri(descrCor)])
+
+#suppressWarnings(ggcorrplot(descrCor))
+highlyCorDescr <- findCorrelation(descrCor, cutoff = .9)
+dat_trsf_nz <- dat_trsf_nz[,-highlyCorDescr]
+descrCor2 <- cor(dat_trsf_nz, use = "pairwise.complete.obs")
+#summary(descrCor2[upper.tri(descrCor2)])
+```
+
+## glmnet lasso
+```{r}
+# median imputation
+prepo <- preProcess(dat_trsf_nz, method = c("medianImpute"), na.remove = TRUE)
+imp_dat_trsf_nz <- predict(prepo, dat_trsf_nz)
+
+
+# cross validation
+c_cv <- cv.glmnet(as.matrix(imp_dat_trsf_nz[-1]), as.matrix(imp_dat_trsf_nz[,1]), standardize = T, alpha = 1)
+tmp_coeffs <- coef(c_cv, s = "lambda.min")
+tmp_coeffs
+plot(c_cv)
+
+
+```
+
+
+## try backward selection, forword selection
+```{r}
+library(MASS)
+fit <- lm(GPA~.,data=imp_dat_trsf_nz)
+step <- stepAIC(fit, direction="forward")
+
+library(leaps)
+null <- lm(GPA~1,data=imp_dat_trsf_nz)
+full <- lm(GPA~.,data=imp_dat_trsf_nz)
+step_leap <- step(null, scope=list(lower=null, upper=full), direction="both", k = log(125))
+summary(step_leap)
+
+
+```
+
+
+
+
+
+## logistic model 
+```{r}
+dat_trsf_nz_im_c <- imp_dat_trsf_nz %>% dplyr::mutate(GPA = GPA >= 3.5, GPA = as.factor(GPA))
+
+# cross validation
+c_cv <- cv.glmnet(as.matrix(dat_trsf_nz_im_c[-1]), as.matrix(dat_trsf_nz_im_c[,1]),family="binomial", standardize = T, alpha = 1)
+tmp_coeffs <- coef(c_cv, s = "lambda.min")
+tmp_coeffs
+plot(c_cv)
+
+
+
+# step wise
+library(leaps)
+null <- glm(GPA~1,data=dat_trsf_nz_im_c, family = binomial)
+full <- glm(GPA~.,data=dat_trsf_nz_im_c, family=binomial)
+stepmodel = step(null,scope=list(lower=formula(null),upper=formula(full)),
+ direction="both", k=log(125))
+summary(stepmodel)
+
+
+summary(glm(GPA~weight, data = dat_trsf_nz_im_c, family=binomial))
+
+```
+
+
+
+## ggplot father education
+```{r}
+# food %>% 
+#   select(healthy_feeling,GPA)%>% 
+#     ggplot(aes( x=as.factor(healthy_feeling),y=GPA, color=as.factor(healthy_feeling))) +
+#     geom_boxplot(width=0.5, alpha=0.5) +
+#   geom_jitter(size=3,alpha=.2)+
+#   #geom_violin(width=1.4)+
+#   labs(color = "Healthy feeling\n")+
+#    geom_point(show.legend = FALSE) +
+#     xlab("Healthy feeling") + 
+#     ylab("GPA") +
+#     ggtitle("Boxplots of GPA vs Healthy feeling")
+
+
+
+food %>%  
+  ggplot(aes(x=as.factor(father_education),y=GPA, color=as.factor(father_education)))+ geom_boxplot(width=0.5,  alpha=0.5)+ xlab("Father Education Level") + geom_jitter(size=3,alpha=.2) +
+    ylab("GPA") +
+    ggtitle("Boxplots of GPA vs Father Education Level") + theme_bw() +labs(color='Father Education Level') +scale_color_hue(labels = c("less than high school", "high school", "associate degree", "college degree", "graduate degree", "prefer not to say"))
+
+```
+
+
+
+## ggplot ethnic food
+```{r}
+food %>%  
+  ggplot(aes(x=as.factor(ethnic_food),y=GPA, color=as.factor(ethnic_food)))+ geom_boxplot(width=0.5,  alpha=0.5)+ xlab("How likely to eat ethnic food") + geom_jitter(size=3,alpha=.2) +
+    ylab("GPA") +
+    ggtitle("Boxplots of GPA vs How Likely to Eat Ethnic Food") + theme_bw() +labs(color='How likely to eat ethnic food') +scale_color_hue(labels = c("very unlikely", "unlikely", "neutral", "likely", "very likely", "N/A"))
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## one variable at a time
+```{r}
+onebyone <- function(num){
+  pvalmat <- matrix(nrow = ncol(imp_dat_trsf_nz)-1, ncol=1)
+  for (i in 2:ncol(imp_dat_trsf_nz)){
+    newcova <- imp_dat_trsf_nz[,i]
+    newfit <- lm(GPA~newcova, data = imp_dat_trsf_nz)
+    newp <- summary(newfit)$coefficients[2,4]
+    pvalmat[i-1,1] <- newp
+  }
+ return(pvalmat)
+}
+pmatrix <- onebyone(num=1) < 0.01
+sum(pmatrix)
+namesmatrix <- (names(imp_dat_trsf_nz))[-1]
+namesmatrix[pmatrix]
+
+
+fitedu <- lm(GPA~father_education.5, data = imp_dat_trsf_nz)
+summary(fitedu)
+
+fitnut <- lm(GPA~nutritional_check.2, data=imp_dat_trsf_nz)
+summary(fitnut)
+```
+
+
+
+
+
+# random forest for variable importance
+```{r}
+library(tidyverse)
+library(pROC)
+library(caret)
+library(pastecs)
+library(ggcorrplot)
+library(randomForest)
+```
+
+```{r}
+set.seed(1234)
+fit_rf <- randomForest(GPA ~ .,data = imp_dat_trsf_nz)
+varImpPlot(fit_rf, type = 2 , main = "Variable Importance based on Random Forest",n.var = 10)
+```
+
+
+## ggplot GPA vs Weight
+```{r}
+food %>%  
+  ggplot(aes(x=as.numeric(weight),y=as.numeric(GPA)))+ geom_smooth(method='lm',formula=y~x)+ xlab("Weight") + geom_jitter(size=3,alpha=.2) +
+    ylab("GPA") +
+    ggtitle("GPA vs Weight") + theme_bw() 
+```
+
+
+
+
+
+
+

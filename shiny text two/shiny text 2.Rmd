@@ -10,7 +10,6 @@ library(NLP)
 library(tm)
 library(igraph)
 library(networkD3)
-food <- read.csv("food_coded.csv",stringsAsFactors = FALSE) 
 
 u <- shinyUI(fluidPage(
   titlePanel("Junk food and mental health with network analysis"),
@@ -96,7 +95,15 @@ s <- shinyServer(
 
 shinyApp(ui = u,server = s)
 
-# need to set to the shiny text two directory
+
+
 runApp()
 deployApp()
 ```
+
+
+
+
+
+
+
