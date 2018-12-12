@@ -3,14 +3,17 @@ title: "Shiny_with_text"
 author: "Yuchen Hu"
 date: "12/9/2018"
 output: pdf_document
-runtime: shiny
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(include = F)
+knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ## Word cloud and exploration
+
+As an open-ended questionnaire, there are also lots of text variables besides the numerical and categorical variables. In order to fully exploit the dataset, we developed a shiny app allowing us to visualize how people react to those questions by characterizing the most frequent words in those variables. To facilitate comparison, we also filtered out some meaningless words such as 'I', 'and', 'my'.
+
+One could choose from the sidebar which variable he would like to view, and it's also possible to adjust the minimum frequency of the word cloud for better visual experience. The higher the minimum frequency, the sparser the word cloud would be.
 
 ```{r}
 library(wordcloud)
@@ -18,11 +21,10 @@ library(tidyverse)
 library(stringr)      
 library(tidytext)
 library(shiny)
-library(rsconnect)
 
 food <- read.csv("food_coded.csv",stringsAsFactors = FALSE) 
 
-food_health <- list("comfort_food" = "comfort_food",
+food_health <- list("Comfort Food" = "comfort_food",
               "Reason for Having Comfort Food" = "comfort_food_reasons",
               "Current Diet" = "diet_current",
               "Change in Eating Habits" = "eating_changes",
@@ -64,9 +66,107 @@ s <- shinyServer(
     wordcloud_rep(v, scale=c(4,0.5),
                   min.freq = input$freq, 
                   colors=brewer.pal(8, "Dark2"))})})
-#shinyApp(ui = u,server = s)
 
-runApp()
-deployApp()
-#install.packages(c("devtools", "ggjoy", "ggridges", "gh", "git2r", "ini", "memoise", "mnormt", "pkgbuild", "pkgload", "prettyunits", "psych", "rcmdcheck", "remotes", "sessioninfo","xopen","desc"))
+shinyApp(ui = u,server = s)
+
+```
+
+For example, under `perception of Healthy Meal`, we see a lot of `protein`, `vegetables` and `fruit`, while under `Comfort Food`, there are mainly `ice cream`, `pizza`, and `chocolate`.
+
+## Junk food and mental health with network analysis
+
+Food is closely related to one's emotional mode and could in turn largely affect one's emotion. There are thousands of articles studying the relationship between food, gut bacteria and mental health. Here we only focus on the two variables available in our dataset, `comfort_food` and `comfort_food_reasons`, aiming to provide some insight towards the relationship through text processing and network analysis.
+
+By choosing `Radical` from the tab, one could view the hierarchical tree diagram with the Reingold & Tilford’s Tidier Layout. The name of the variable would be magnified when the cursor is pointed to it. `Fruchterman-Reingold` gives the force-directed diagram with the Fruchterman-Reingold layout. For both of the diagrams, one could adjust the sparsity to achieve better visualization effect.
+
+```{r}
+library(shiny)
+library(NLP)
+library(tm)
+library(igraph)
+library(networkD3)
+
+u <- shinyUI(fluidPage(
+  titlePanel("Junk food and mental health with network analysis"),
+
+  sidebarLayout(
+    position = "left",
+    sidebarPanel(
+      h2("Controls"),
+      sliderInput("sparse", "Sparsity:", 0.9, 1, 0.994,0.002),
+      numericInput("fmrseed", "F-R Seed:", 1234, 1, 10000, 1)
+    ),
+    mainPanel(
+      h2("Network Graphs"),
+      tabsetPanel(
+        tabPanel("Radial",radialNetworkOutput("radial")),
+        tabPanel("Fruchterman-Reingold", plotOutput("fmr"))
+      )
+  )
+))
+)
+
+data <- food[,names(food) %in% c("comfort_food","comfort_food_reasons")] 
+data <- do.call(paste, c(food[c("comfort_food", "comfort_food_reasons")], sep = ". ")) %>% str_to_lower()
+
+s <- shinyServer(
+  function(input, output)
+  {
+    r_stats_text_corpus <- Corpus(VectorSource(data))
+
+    matadj <- reactive({
+      tdm <-TermDocumentMatrix(r_stats_text_corpus, control = list(wordLenghts = c(1, Inf)))
+      idx <-which(dimnames(tdm)$Terms == "call") ##change the terms to be searched
+      tdm2 <- removeSparseTerms(tdm, sparse = input$sparse)
+      m2 <- as.matrix(tdm2)
+      m2[m2 >= 1] <- 1
+      m2 <- m2 %*% t(m2) ##Adjaceny Matrix - how often words co-occur in a sentence
+      m2
+    })
+
+    fit <- reactive({
+      fit <- hclust(dist(matadj()))
+    })
+
+    fmrlayout <- reactive({
+      set.seed(input$fmrseed)
+      g <- graph.adjacency(matadj(), weighted = T, mode = "undirected")
+      g <- simplify(g)
+      V(g)$label <- V(g)$name
+      V(g)$degree <- degree(g)
+      layout <- layout.fruchterman.reingold(g)
+      rv <- list()
+      rv$g <- g
+      rv$layout <- layout
+      rv
+    })
+
+    radialnet <- reactive({
+      set.seed(input$fmrseed)
+      radial <- as.radialNetwork(fit())
+    })  
+
+    ###Different Social Network Graphics
+
+    #Radial Network
+    output$radial <- renderRadialNetwork({
+      radialNetwork(radialnet())
+    })
+    output$radial1 <- renderRadialNetwork({
+      radialNetwork(radialnet())
+    })
+
+    # Fruchterman-Reingold Network
+    output$fmr <- renderPlot({
+      rv <- fmrlayout()
+      plot(rv$g, layout = rv$layout)
+    })
+    output$fmr1 <- renderPlot({
+      rv <- fmrlayout()
+      plot(rv$g, layout = rv$layout)
+    })
+  }
+)
+
+shinyApp(ui = u,server = s)
 ```

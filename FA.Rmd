@@ -1,5 +1,5 @@
 ---
-title: "Factor Analysis"
+title: "Exploratory Factor Analysis"
 author: "Yuchen Hu"
 date: "11/26/2018"
 output: pdf_document
@@ -9,7 +9,9 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r}
+It could be noticed that we have a large set of covariates comparing to the number of observations we have. It's possible that a lot of covariates in our datasets are highly correlated, and they might be jointly characterized by some latent factors.
+
+```{r message=FALSE, warning=FALSE}
 library(dplyr)
 library(ggplot2)
 library(data.table)
@@ -20,55 +22,56 @@ library(tidyr)
 
 food <- read.csv("food_coded.csv",stringsAsFactors = FALSE) 
 #summary(food)
+
+food <- read.csv("./data/food_coded_clean.csv", na = "nan")
+food <- food %>% dplyr::select( - ends_with("_1"))
+food <- food %>% dplyr::mutate_if(is.integer, as.factor) %>%
+  dplyr::select_if(function(x) !is.character(x))
 ```
 
-## basic FA
+We start by filtering out all the numerical values in our dataframe. To decide the optimal number of factors to include in our model, we start by calculating the eigenvalues and ploting the scree plot.
+
 ```{r}
-food_numeric <- food %>% select_if(is.numeric)
-food_numeric <- food_numeric[complete.cases(food_numeric), ]
+food_numeric <- food[,-c(8,9,14,17,25,26,29,35,36,43,45,57)]
+food_numeric <- food_numeric[complete.cases(food_numeric), ] %>%
+  lapply(function(x) as.numeric(as.character(x)))
+food_numeric <- as.data.frame(do.call(cbind, food_numeric))
 ev <- eigen(cor(food_numeric))
 ap <- parallel(subject=nrow(food_numeric),var=ncol(food_numeric),
                rep=100,cent=.05)
 nS <- nScree(x=ev$values, aparallel=ap$eigen$qevpea)
 plotnScree(nS)
+```
 
-fa_numeric <- factanal(food_numeric, 5, rotation="varimax", scores="regression")
-print(fa_numeric, digits=2, cutoff=.3, sort=TRUE)
-# factor1: food choices; 2:calories guess; 3:life style ; 4:comfort food; 5:education
-fa_numeric <- fa(food_numeric, 5)
+It seems that we may choose to include 7 factors in our model. 
+
+```{r message=FALSE, warning=FALSE}
+fa_numeric <- fa(food_numeric, 7)
+summary(fa_numeric)
 fa.diagram(fa_numeric,side=1) 
+```
 
+From the factor diagram, we may figure out some interpretation for the latent factors by the main variables contributing to them. For factor 1, it's mainly composed of variables explaining the individual preference towards different types of cuisine. For factor 2, it's mainly composed of variables related to individual's daily eating habits. Factor 3 explains individual's choice in terms of comfort food, and factor 4 characterizes how well people did in guessing the calories of different food. Factor 5 focuses on some more general information on the individual's social background, and factor 6 explains individual's demographic information. Finally, factor 7 reflects how people feel about their life.
+
+The dimension could thus be reduced by replacing the covariates by the factor loadings. According to the interpretation of the variables, we define the 7 factors as "food_choices", "eating_habits", "comfort_food", "calories_guess", "social_background", "demographic_information", and "life_feeling" respectively.
+
+```{r}
 # plot the result
-gathering <- as.data.frame(matrix(nrow = dim(food_numeric)[2], ncol =5))
+gathering <- as.data.frame(matrix(nrow = dim(food_numeric)[2], ncol =7))
 gathering$Variable <- colnames(food_numeric)
-for (i in 1:5) {
+for (i in 1:7) {
   for (j in 1:dim(food_numeric)[2]) {
     gathering[j, i] <- fa_numeric$loadings[j, i]  
   }
 }
-colnames(gathering) <- c("food_choices","calories_guess",
-                         "life_style","comfort_food","education", "Variable")
-gathering <- gathering %>% gather("Factor", "Value", 1:5)
+colnames(gathering) <- c("food_choices", "eating_habits", "comfort_food", 
+                         "calories_guess", "social_background", 
+                         "demographic_information", "life_feeling", "Variable")
+gathering <- gathering %>% gather("Factor", "Value", 1:7)
 ggplot(gathering, aes(Variable, abs(Value), fill=Factor)) + 
   geom_bar(stat="identity") + coord_flip() + 
   ylab("Factor Loading") + 
-  theme_bw(base_size=12) 
+  theme_bw(base_size=8) 
 ```
 
-## run regression on score
-```{r}
-factor_gpa <- merge(as.numeric(food$GPA),fa_numeric$scores,
-                    by="row.names",all.x=FALSE)[,-1]
-names(factor_gpa) <- c("GPA","food_choices","calories_guess","life_style",
-                       "comfort_food","education")
-# regression based on numerical GPA
-fit.factor <- lm(GPA~food_choices+calories_guess+life_style+comfort_food+education,
-                 data=factor_gpa)
-summary(fit.factor)
-# regression based on categorical GPA
-factor_gpa$GPA <- cut(factor_gpa$GPA, c(0,2.5,3,3.25,3.5,3.75,4.0))
-factor_gpa$GPA <- as.numeric(factor_gpa$GPA)
-fit.factor <- lm(GPA~food_choices+calories_guess+life_style+comfort_food+education,
-                 data=factor_gpa)
-summary(fit.factor)
-```
+
