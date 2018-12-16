@@ -9,6 +9,8 @@ output:
 ```{r, message = FALSE}
 library(tidyverse)
 library(caret)
+library(kernlab)
+library(e1071)
 library(pROC)
 library(plotROC)
 library(pastecs)
@@ -22,7 +24,7 @@ library(reshape2)
 library(randomForest)
 library(ggridges)
 ```
-Package Installation Warning: "Caret" requires several differen models. Unfortunately they could not be `library` at the beginning of Rmd. Please install them manually if there is any warning message when using caret to perform machine learning part.  
+Package Installation Warning: "Caret" requires several differen models. Unfortunately they could not be `library` at the beginning of Rmd. Please install them manually if there is any error/warning message when using caret to perform machine learning part.  
 
 Please specify your root here.
 ```{r setup, include=TRUE}
