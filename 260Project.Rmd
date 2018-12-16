@@ -1,15 +1,12 @@
-
-
-
 ---
-title: "260Project"
+title: "Predicting College Students’ GPA through their Food and Cooking Preferences"
 author: "Jingyi Huang, Yuchen Hu, Ante Bing and Dongyuan Song"
 date: "2018/12/2"
 output:
   html_document:
     df_print: paged
 ---
-```{r}
+```{r, message = FALSE}
 library(tidyverse)
 library(caret)
 library(pROC)
@@ -23,12 +20,15 @@ library(psych)
 library(nFactors)
 library(reshape2)
 library(randomForest)
+library(ggridges)
 ```
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
-```
+Package Installation Warning: "Caret" requires several differen models. Unfortunately they could not be `library` at the beginning of Rmd. Please install them manually if there is any warning message when using caret to perform machine learning part.  
 
-An important part of your project is the RMarkdown and HTML files. This will detail your steps in developing your solution, including how you collected the data, alternative solutions you tried, describing statistical methods you used, and the insights you got. Equally important to your final results is how you got there! Your RMarkdown and HTML files are the place you describe and document the space of possibilities you explored at each step of your project. We strongly advise you to include many visualizations.
+Please specify your root here.
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                      root.dir = "D:/MS/Master Course/BST260/Final_project/BST260")
+```
 
 ## Overview and Motivation
 Provide an overview of the project goals and the motivation for it. Consider that this will be read by people who did not see your project proposal.
@@ -80,12 +80,7 @@ What visualizations did you use to look at your data in different ways? What are
 We tried to use correlation plots which are usually used for continuous variables vs continuous variables to test collinearity. However, most of our covariates are categorical variables, so we decide to first use distribution plots and box plots to illustrate the relationship between our continuous dependent variable (GPA) and categorical independent variables (healthy feeling, fruit intake and etc).
 
 ```{r}
-library(ggridges)
-library(devtools)
-library(dplyr)
-library(ggplot2)
-library(dplyr)
-food1=breakfast_clean <- readRDS("~/Desktop/BST260/data/breakfast_clean.rds")
+food1=breakfast_clean <- readRDS("./data/breakfast_clean.rds")
 Fruit=as.factor(food1$fruit_day)
 food1 %>% 
   #select(fruit_day,GPA)%>% 
@@ -187,7 +182,7 @@ For convenience reasons, we first created dummy variables for all of the categor
 
 ```{r}
 dat_dummy <- dummyVars(" ~ .", data = dat, fullRank = T)
-head(dat_dummy)
+#head(dat_dummy)
 dat_trsf <- data.frame(predict(dat_dummy, newdata = dat))
 
 nzv <- nearZeroVar(dat_trsf, saveMetrics= TRUE)
@@ -225,7 +220,7 @@ However, none of the covariates were selected into the final model (Please see t
 ```{r}
 null <- lm(GPA~1,data=imp_dat_trsf_nz)
 full <- lm(GPA~.,data=imp_dat_trsf_nz)
-step_leap <- step(null, scope=list(lower=null, upper=full), direction="both", k = log(125))
+step_leap <- step(null, scope=list(lower=null, upper=full), direction="both", k = log(125), trace = 0)
 summary(step_leap)
 ```
 
@@ -250,7 +245,7 @@ LASSO returned three covariates: 1. if students' father went to graduate school 
 null <- glm(GPA~1,data=dat_trsf_nz_im_c, family = binomial)
 full <- glm(GPA~.,data=dat_trsf_nz_im_c, family=binomial)
 stepmodel = step(null,scope=list(lower=formula(null),upper=formula(full)),
- direction="both", k=log(125))
+ direction="both", k=log(125), trace = 0)
 summary(stepmodel)
 ```
 
@@ -306,7 +301,7 @@ One main interest is to use our food data to predict GPA. From Interpretation mo
 ### Data Preprocessing
 We have performed standard data preprocessing in last step. 
 We now want to create training data and test data.
-Split data into train set and test set.
+Split data into train set and test set. The size of test data is 20% of original data.  
 ```{r}
 dat_trsf_nz_im <- imp_dat_trsf_nz
 set.seed(123)
@@ -343,7 +338,7 @@ We also use the naive mean of training set to calculate RMSE on test set.
 ```{r}
 sqrt(mean((y.test - mean(y.train))^2))
 ```
-This is quite embarrassing: simple Mean actually beats all predictive models, which means they did not work at all.
+This is quite embarrassing: simple Mean actually beats all predictive models, which means they did not work at all. We could not use our data to predict continous GPA. Another probrem is that we did not have restrains on GPA value here (we knew it should be 0-4).  
 
 
 ### Binary GPA
@@ -365,7 +360,6 @@ y.c <- y.train.c
 
 We tried several “classification” models: "knn", "rf", "glm", "lda",  "svmLinear", "svmRadial".
 
-
 ```{r}
 set.seed(123)
 
@@ -383,7 +377,7 @@ for (m in 1:n_models) {
     cat(c("Test Accuracy", round(acc_test, 3), "\n"))
 }
 ```
-All results seem to be not quite satisfying; we check further in the ROC curves. We chose “glm”, “knn”, “rf” and “lda” (“svm” does not provide ROC curve).
+All results seem to be not quite satisfying; we check further in the ROC curves. We chose “glm”, “knn”, “rf” and “lda” (“svm” does not provide ROC curve). Note here we did not add "SVM" since it does not have a ROC curve.
 ```{r}
 set.seed(123)
 fit_knn <- train(GPA ~ ., method = "knn", trControl = train.control, data = x.c)
@@ -399,12 +393,14 @@ R2 = roc(y.test.c, probs2[,2])
 #plot.roc(R2, col=1, lwd=2, add = TRUE)
 AUC2 = R2$auc
 
+set.seed(123)
 fit_rf <- train(GPA ~ ., method = "rf", trControl = train.control, data = x.c)
 probs3 = predict(fit_rf, newdata = x.test.c, type = "prob")
 R3 = roc(y.test.c, probs3[,2])
 #plot.roc(R3, add = TRUE, col=2, lwd=2)
 AUC3 = R3$auc
 
+set.seed(123)
 fit_lda <- train(GPA ~ ., method = "lda", trControl = train.control, data = x.c)
 probs4 = predict(fit_lda, newdata = x.test.c, type = "prob")
 R4 = roc(y.test.c, probs4[,2])
@@ -413,7 +409,7 @@ AUC4 = R4$auc
 ```
 ```{r}
 test <- data.frame(D = y.test.c, knn = probs1[,2], glm = probs2[,2], rf = probs3[,2], lda = probs4[,2])
-head(test)
+#head(test)
 test <- test %>% tidyr::gather(key = Model, value = M, -D)
 ```
 ```{r}
@@ -423,7 +419,8 @@ ggplot(data = test, aes(d = D, m = M, color = Model, linetype = Model)) +
   theme_bw() +
   ggtitle("ROC Curve for GPA Prediction")
 ```
-From the ROC curves we can see that those models are not very predictive.
+
+From the ROC curves we can see that those models are not very predictive: curves are even below diagnoal line.
 
 Hence, using our food data to predict GPA is not a good idea. It is possible that our sample size is too small; it can also be explained that GPA actually has a weak relationship with food. To check if our machine learning model works, we tried to use the same models to predict weights and hope that it will yield better results compared with GPA.  
 
@@ -431,6 +428,7 @@ Hence, using our food data to predict GPA is not a good idea. It is possible tha
 We used the exact same data and models to predict weights.  
 To make results comparable with GPA, here we also convert weight into a binary outcomes (>155 lb).
 ```{r}
+set.seed(1234)
 dat_trsf_nz_im_c <- dat_trsf_nz_im %>% dplyr::mutate(weight = weight >= 155, weight = as.factor(weight))
 x.c <- dat_trsf_nz_im_c
 y.c <- dat_trsf_nz_im_c[, "weight"]
@@ -444,15 +442,49 @@ y.c <- y.train.c
 We used same models as we did for GPA.
 
 ```{r}
+set.seed(123)
+fit_knn <- train(weight ~ ., method = "knn", trControl = train.control, data = x.c)
+probs1 = predict(fit_knn, newdata = x.test.c, type = "prob")
+R1 = roc(y.test.c, probs1[,2])
+#plot.roc(R1, col=1, lwd=2, main="ROC curves")
+AUC1 = R1$auc
+
+set.seed(123)
+fit_glm <- train(weight ~ ., method = "glm", trControl = train.control, data = x.c)
+probs2 = predict(fit_glm, newdata = x.test.c, type = "prob")
+R2 = roc(y.test.c, probs2[,2])
+#plot.roc(R2, col=1, lwd=2, add = TRUE)
+AUC2 = R2$auc
+
+set.seed(123)
+fit_rf <- train(weight ~ ., method = "rf", trControl = train.control, data = x.c)
+probs3 = predict(fit_rf, newdata = x.test.c, type = "prob")
+R3 = roc(y.test.c, probs3[,2])
+#plot.roc(R3, add = TRUE, col=2, lwd=2)
+AUC3 = R3$auc
+
+set.seed(123)
+fit_lda <- train(weight ~ ., method = "lda", trControl = train.control, data = x.c)
+probs4 = predict(fit_lda, newdata = x.test.c, type = "prob")
+R4 = roc(y.test.c, probs4[,2])
+#plot.roc(R4, add = TRUE, col=3, lwd=2)
+AUC4 = R4$auc
+```
+```{r}
+test <- data.frame(D = y.test.c, knn = probs1[,2], glm = probs2[,2], rf = probs3[,2], lda = probs4[,2])
+#head(test)
+test <- test %>% tidyr::gather(key = Model, value = M, -D)
+```
+
+```{r}
 ggplot(data = test, aes(d = D, m = M, color = Model, linetype = Model)) +
   geom_roc(n.cuts = 0) + 
   geom_abline(slope = 1, intercept = 0, alpha = 1, color = "grey") +
   theme_bw() +
   ggtitle("ROC Curve for Weight Prediction")
 ```
+
 We can see that the model performs much better. Therefore, our machine learning methods do work for predicting weights.
-
-
 
 ## Conclusion
 
@@ -474,6 +506,9 @@ Michelle D. Florence MSc, PDt  Mark Asbridge PhD  Paul J. Veugelers PhD
 Healthier Students Are Better Learners: A Missing Link in School Reforms to Close the Achievement Gap (2011)
 CHARLES E. BASCH, PhD
 
+(Reingold & Tilford, 1981) Reingold, E. M., & Tilford, J. S. (1981). Tidier drawings of trees. IEEE Transactions on software Engineering, (2), 223-228.  
+
+(Fruchterman & Reingold, 1991) Fruchterman, T. M., & Reingold, E. M. (1991). Graph drawing by force‐directed placement. Software: Practice and experience, 21(11), 1129-1164.
 
 
 

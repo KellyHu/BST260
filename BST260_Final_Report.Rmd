@@ -11,6 +11,7 @@ library(tidyverse)
 library(caret)
 library(pROC)
 library(plotROC)
+library(ggjoy)
 library(pastecs)
 library(ggcorrplot)
 library(MASS)
@@ -77,6 +78,7 @@ What visualizations did you use to look at your data in different ways? What are
 We tried to use correlation plots which are usually used for continuous variables vs continuous variables to test collinearity. However, most of our covariates are categorical variables, so we decide to first use distribution plots and box plots to illustrate the relationship between our continuous dependent variable (GPA) and categorical independent variables (healthy feeling, fruit intake and etc).
 
 ```{r}
+food <- readRDS("./data/breakfast_clean.rds")
 food %>% 
   select(fruit_day,GPA)%>% 
     ggplot(aes( y=fruit_day,x=GPA, group=as.factor(fruit_day),fill=as.factor(fruit_day)))+
