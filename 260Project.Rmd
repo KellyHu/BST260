@@ -9,8 +9,6 @@ output:
 ```{r, message = FALSE}
 library(tidyverse)
 library(caret)
-library(kernlab)
-library(e1071)
 library(pROC)
 library(plotROC)
 library(pastecs)
@@ -24,7 +22,7 @@ library(reshape2)
 library(randomForest)
 library(ggridges)
 ```
-Package Installation Warning: "Caret" requires several differen models. Unfortunately they could not be `library` at the beginning of Rmd. Please install them manually if there is any error/warning message when using caret to perform machine learning part.  
+Package Installation Warning: "Caret" requires several differen models. Unfortunately they could not be `library` at the beginning of Rmd. Please install them manually if there is any warning message when using caret to perform machine learning part.  
 
 Please specify your root here.
 ```{r setup, include=TRUE}
@@ -175,8 +173,167 @@ ggplot(gathering, aes(Variable, abs(Value), fill=Factor)) +
   theme_bw(base_size=8) 
 ```
 
+## Word cloud and exploration
 
+As an open-ended questionnaire, there are also lots of text variables besides the numerical and categorical variables. In order to fully exploit the dataset, we developed a shiny app allowing us to visualize how people react to those questions by characterizing the most frequent words in those variables. To facilitate comparison, we also filtered out some meaningless words such as 'I', 'and', 'my'.
 
+One could choose from the sidebar which variable he would like to view, and it's also possible to adjust the minimum frequency of the word cloud for better visual experience. The higher the minimum frequency, the sparser the word cloud would be.
+
+```{r, eval=FALSE}
+library(wordcloud)
+library(tidyverse)   
+library(stringr)      
+library(tidytext)
+library(shiny)
+
+food <- read.csv("food_coded.csv",stringsAsFactors = FALSE) 
+
+food_health <- list("Comfort Food" = "comfort_food",
+              "Reason for Having Comfort Food" = "comfort_food_reasons",
+              "Current Diet" = "diet_current",
+              "Change in Eating Habits" = "eating_changes",
+              "Food used to have in childhood" = "food_childhood",
+              "Perception of Healthy Meal" = "healthy_meal",
+              "Ideal diet" = "ideal_diet",
+              "Dinners to Have with Friends" = "meals_dinner_friend",
+              "Types of Sports" = "type_sports")
+
+getWords <- function(variable) {
+  if (!(variable %in% food_health))
+    stop("Unknown variable")
+
+  text <- food[,names(food) == variable] %>% 
+    str_to_lower() %>% 
+    str_split("\"\'(),|\\|/| ") %>%
+    unlist()
+  text <- text[!text %in% c('','and','i','when','am','or','they','i\'m','my','usually','are','a','/')]}
+
+u <- shinyUI(fluidPage(
+  titlePanel("Word Cloud for text variables in our dataset"),
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("selection", "Choose a variable:",
+                  choices = food_health),
+      hr(),
+      sliderInput("freq",
+                  "Minimum Frequency:",
+                  min = 1,  max = 20, value = 5)),
+    mainPanel(plotOutput("plot")))))
+
+s <- shinyServer(
+  function(input, output, session) {
+  terms <- reactive({getWords(input$selection)})
+
+  wordcloud_rep <- repeatable(wordcloud)
+  output$plot <- renderPlot({
+    v <- terms()
+    wordcloud_rep(v, scale=c(4,0.5),
+                  min.freq = input$freq, 
+                  colors=brewer.pal(8, "Dark2"))})})
+
+shinyApp(ui = u,server = s)
+
+```
+
+For example, under `perception of Healthy Meal`, we see a lot of `protein`, `vegetables` and `fruit`, while under `Comfort Food`, there are mainly `ice cream`, `pizza`, and `chocolate`.
+
+## Junk food and mental health with network analysis
+
+Food is closely related to one's emotional mode and could in turn largely affect one's emotion. There are thousands of articles studying the relationship between food, gut bacteria and mental health. Here we only focus on the two variables available in our dataset, `comfort_food` and `comfort_food_reasons`, aiming to provide some insight towards the relationship through text processing and network analysis.
+
+By choosing `Radical` from the tab, one could view the hierarchical tree diagram with the Reingold & Tilford’s Tidier Layout (Reingold & Tilford, 1981). The name of the variable would be magnified when the cursor is pointed to it. `Fruchterman-Reingold` gives the force-directed diagram with the Fruchterman-Reingold layout (Fruchterman & Reingold, 1991). For both of the diagrams, one could adjust the sparsity to achieve better visualization effect.
+
+```{r, eval=FALSE}
+library(shiny)
+library(NLP)
+library(tm)
+library(igraph)
+library(networkD3)
+
+u <- shinyUI(fluidPage(
+  titlePanel("Junk food and mental health with network analysis"),
+
+  sidebarLayout(
+    position = "left",
+    sidebarPanel(
+      h2("Controls"),
+      sliderInput("sparse", "Sparsity:", 0.9, 1, 0.994,0.002),
+      numericInput("fmrseed", "F-R Seed:", 1234, 1, 10000, 1)
+    ),
+    mainPanel(
+      h2("Network Graphs"),
+      tabsetPanel(
+        tabPanel("Radial",radialNetworkOutput("radial")),
+        tabPanel("Fruchterman-Reingold", plotOutput("fmr"))
+      )
+  )
+))
+)
+
+data <- food[,names(food) %in% c("comfort_food","comfort_food_reasons")] 
+data <- do.call(paste, c(food[c("comfort_food", "comfort_food_reasons")], sep = ". ")) %>% str_to_lower()
+
+s <- shinyServer(
+  function(input, output)
+  {
+    r_stats_text_corpus <- Corpus(VectorSource(data))
+
+    matadj <- reactive({
+      tdm <-TermDocumentMatrix(r_stats_text_corpus, control = list(wordLenghts = c(1, Inf)))
+      idx <-which(dimnames(tdm)$Terms == "call") ##change the terms to be searched
+      tdm2 <- removeSparseTerms(tdm, sparse = input$sparse)
+      m2 <- as.matrix(tdm2)
+      m2[m2 >= 1] <- 1
+      m2 <- m2 %*% t(m2) ##Adjaceny Matrix - how often words co-occur in a sentence
+      m2
+    })
+
+    fit <- reactive({
+      fit <- hclust(dist(matadj()))
+    })
+
+    fmrlayout <- reactive({
+      set.seed(input$fmrseed)
+      g <- graph.adjacency(matadj(), weighted = T, mode = "undirected")
+      g <- simplify(g)
+      V(g)$label <- V(g)$name
+      V(g)$degree <- degree(g)
+      layout <- layout.fruchterman.reingold(g)
+      rv <- list()
+      rv$g <- g
+      rv$layout <- layout
+      rv
+    })
+
+    radialnet <- reactive({
+      set.seed(input$fmrseed)
+      radial <- as.radialNetwork(fit())
+    })  
+
+    ###Different Social Network Graphics
+
+    #Radial Network
+    output$radial <- renderRadialNetwork({
+      radialNetwork(radialnet())
+    })
+    output$radial1 <- renderRadialNetwork({
+      radialNetwork(radialnet())
+    })
+
+    # Fruchterman-Reingold Network
+    output$fmr <- renderPlot({
+      rv <- fmrlayout()
+      plot(rv$g, layout = rv$layout)
+    })
+    output$fmr1 <- renderPlot({
+      rv <- fmrlayout()
+      plot(rv$g, layout = rv$layout)
+    })
+  }
+)
+
+shinyApp(ui = u,server = s)
+```
 
 ## Interpretation Model
 For convenience reasons, we first created dummy variables for all of the categorical covariates in the dataset. We then removed the highly correlated covariates using cutoff value at 0.9. As for missing values, we couldn't remove the missing rows because there were less than half of the observations are completed cases. We decided to use median imputations since considering the sample size, it is also inappropriate to assume other types of underlying distributions for the observed values.
@@ -186,22 +343,18 @@ For convenience reasons, we first created dummy variables for all of the categor
 dat_dummy <- dummyVars(" ~ .", data = dat, fullRank = T)
 #head(dat_dummy)
 dat_trsf <- data.frame(predict(dat_dummy, newdata = dat))
-
 nzv <- nearZeroVar(dat_trsf, saveMetrics= TRUE)
 nzv[nzv$nzv,]
 #Unluckily, there are some near zero-variance factors. We remove them.
-
 nzv <- nearZeroVar(dat_trsf)
 dat_trsf_nz <- dat_trsf[, -nzv]
 descrCor <- cor(dat_trsf_nz, use = "pairwise.complete.obs")
 #summary(descrCor[upper.tri(descrCor)])
-
 # remove highly correlated columns
 highlyCorDescr <- findCorrelation(descrCor, cutoff = .9)
 dat_trsf_nz <- dat_trsf_nz[,-highlyCorDescr]
 descrCor2 <- cor(dat_trsf_nz, use = "pairwise.complete.obs")
 #summary(descrCor2[upper.tri(descrCor2)])
-
 # median imputation
 prepo <- preProcess(dat_trsf_nz, method = c("medianImpute"), na.remove = TRUE)
 imp_dat_trsf_nz <- predict(prepo, dat_trsf_nz)
@@ -232,7 +385,6 @@ Four covariates turned out to be statistically significant (p < 0.05). Those cov
 For the categorical case, we separated GPA into two categories: below 3.5 and above 3.5. We selected this cutoff value because the median GPA value is around 3.5. Similarly, we carried out both LASSO and step-wise selections. 
 ```{r}
 dat_trsf_nz_im_c <- imp_dat_trsf_nz %>% dplyr::mutate(GPA = GPA >= 3.5, GPA = as.factor(GPA))
-
 # LASSO
 c_cv <- cv.glmnet(as.matrix(dat_trsf_nz_im_c[-1]), as.matrix(dat_trsf_nz_im_c[,1]),family="binomial", standardize = T, alpha = 1)
 tmp_coeffs <- coef(c_cv, s = "lambda.min")
@@ -261,7 +413,6 @@ food %>%
   ggplot(aes(x=as.factor(father_education),y=GPA, color=as.factor(father_education)))+ geom_boxplot(width=0.5,  alpha=0.5)+ xlab("Father Education Level") + geom_jitter(size=3,alpha=.2) +
 	ylab("GPA") +
 	ggtitle("Boxplots of GPA vs Father Education Level") + theme_bw() +labs(color='Father Education Level') +scale_color_hue(labels = c("less than high school", "high school", "associate degree", "college degree", "graduate degree", "prefer not to say"))
-
 ```
 Additionally, if we only consider categorical GPA as the outcome, another interesting case is students' love toward ethnic food, which seems to be positively related to GPA. 
 
@@ -271,7 +422,6 @@ food %>%
   ggplot(aes(x=as.factor(ethnic_food),y=GPA, color=as.factor(ethnic_food)))+ geom_boxplot(width=0.5,  alpha=0.5)+ xlab("How likely to eat ethnic food") + geom_jitter(size=3,alpha=.2) +
 	ylab("GPA") +
 	ggtitle("Boxplots of GPA vs How Likely to Eat Ethnic Food") + theme_bw() +labs(color='How likely to eat ethnic food') +scale_color_hue(labels = c("very unlikely", "unlikely", "neutral", "likely", "very likely", "N/A"))
-
 ```
 Although the sample size is small, we can still detect some trend here. Since students' love toward ethnic food might be related to their background, culture or heritage, it is not surprising to identify a trend here.
 
@@ -325,7 +475,6 @@ We first treat GPA as a continuous variable. We tried several “regression” m
 set.seed(123)
 models = c("knn", "glm", "ridge", "lasso", "rf", "svmRadial")
 train.control = trainControl(method = "repeatedcv", number = 5, repeats = 10, verbose = FALSE)
-
 n_models = length(models)
 for (m in 1:n_models) {
     fit = train(GPA ~ ., method = models[m], trControl = train.control, data = x)
@@ -353,7 +502,6 @@ x.c <- dat_trsf_nz_im_c
 y.c <- dat_trsf_nz_im_c[, "GPA"]
 y.train.c <- y.c[trainIndex]
 y.test.c <- y.c[-trainIndex]
-
 x.train.c <- x.c[trainIndex,]
 x.test.c <- x.c[-trainIndex,]
 x.c <- x.train.c
@@ -364,12 +512,9 @@ We tried several “classification” models: "knn", "rf", "glm", "lda",  "svmLi
 
 ```{r}
 set.seed(123)
-
 models = c("knn", "rf", "glm", "lda",  "svmLinear", "svmRadial")
 train.control = trainControl(method = "repeatedcv", number = 10, repeats = 10, verbose = FALSE)
-
 n_models = length(models)
-
 for (m in 1:n_models) {
     fit = train(GPA ~ ., method = models[m], trControl = train.control, data = x.c)
     cat(c(models[m], "\n"))
@@ -387,21 +532,18 @@ probs1 = predict(fit_knn, newdata = x.test.c, type = "prob")
 R1 = roc(y.test.c, probs1[,2])
 #plot.roc(R1, col=1, lwd=2, main="ROC curves")
 AUC1 = R1$auc
-
 set.seed(123)
 fit_glm <- train(GPA ~ ., method = "glm", trControl = train.control, data = x.c)
 probs2 = predict(fit_glm, newdata = x.test.c, type = "prob")
 R2 = roc(y.test.c, probs2[,2])
 #plot.roc(R2, col=1, lwd=2, add = TRUE)
 AUC2 = R2$auc
-
 set.seed(123)
 fit_rf <- train(GPA ~ ., method = "rf", trControl = train.control, data = x.c)
 probs3 = predict(fit_rf, newdata = x.test.c, type = "prob")
 R3 = roc(y.test.c, probs3[,2])
 #plot.roc(R3, add = TRUE, col=2, lwd=2)
 AUC3 = R3$auc
-
 set.seed(123)
 fit_lda <- train(GPA ~ ., method = "lda", trControl = train.control, data = x.c)
 probs4 = predict(fit_lda, newdata = x.test.c, type = "prob")
@@ -450,21 +592,18 @@ probs1 = predict(fit_knn, newdata = x.test.c, type = "prob")
 R1 = roc(y.test.c, probs1[,2])
 #plot.roc(R1, col=1, lwd=2, main="ROC curves")
 AUC1 = R1$auc
-
 set.seed(123)
 fit_glm <- train(weight ~ ., method = "glm", trControl = train.control, data = x.c)
 probs2 = predict(fit_glm, newdata = x.test.c, type = "prob")
 R2 = roc(y.test.c, probs2[,2])
 #plot.roc(R2, col=1, lwd=2, add = TRUE)
 AUC2 = R2$auc
-
 set.seed(123)
 fit_rf <- train(weight ~ ., method = "rf", trControl = train.control, data = x.c)
 probs3 = predict(fit_rf, newdata = x.test.c, type = "prob")
 R3 = roc(y.test.c, probs3[,2])
 #plot.roc(R3, add = TRUE, col=2, lwd=2)
 AUC3 = R3$auc
-
 set.seed(123)
 fit_lda <- train(weight ~ ., method = "lda", trControl = train.control, data = x.c)
 probs4 = predict(fit_lda, newdata = x.test.c, type = "prob")
@@ -508,32 +647,6 @@ Michelle D. Florence MSc, PDt  Mark Asbridge PhD  Paul J. Veugelers PhD
 Healthier Students Are Better Learners: A Missing Link in School Reforms to Close the Achievement Gap (2011)
 CHARLES E. BASCH, PhD
 
-(Reingold & Tilford, 1981) Reingold, E. M., & Tilford, J. S. (1981). Tidier drawings of trees. IEEE Transactions on software Engineering, (2), 223-228.  
+Tidier drawings of trees. IEEE Transactions on software Engineering, (2), 223-228 (1981) Reingold, E. M., & Tilford, J. S. 
 
-(Fruchterman & Reingold, 1991) Fruchterman, T. M., & Reingold, E. M. (1991). Graph drawing by force‐directed placement. Software: Practice and experience, 21(11), 1129-1164.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+Graph drawing by force‐directed placement. Software: Practice and experience 21(11), 1129-1164 (1991) Fruchterman, T. M., & Reingold, E. M. 
